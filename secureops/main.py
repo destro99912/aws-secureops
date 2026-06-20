@@ -1,10 +1,29 @@
 import sys
 import botocore.exceptions
 from core.aws_session import get_aws_session
+from scanners.iam_scanner import scan_iam
+
+def print_finding(index, finding):
+    severity_colors = {
+        "CRITICAL": "[CRITICAL]",
+        "HIGH":     "[HIGH]    ",
+        "MEDIUM":   "[MEDIUM]  ",
+        "LOW":      "[LOW]     "
+    }
+    
+    sev = finding.get("severity", "INFO")
+    sev_str = severity_colors.get(sev, f"[{sev}]".ljust(10))
+    
+    print("-" * 60)
+    print(f"Finding #{index} - {sev_str} | Service: {finding.get('service')}")
+    print(f"Title:          {finding.get('title')}")
+    print(f"Resource:       {finding.get('resource')}")
+    print(f"Evidence:       {finding.get('evidence')}")
+    print(f"Recommendation: {finding.get('recommendation')}")
 
 def main():
     print("=" * 60)
-    print(" AWS SecureOps - Initializing Posture Scanner")
+    print(" AWS SecureOps - Posture Scanner")
     print("=" * 60)
     
     profile = "secureops"
@@ -21,7 +40,6 @@ def main():
         print(f"    Account:  {identity.get('Account')}")
         print(f"    Arn:      {identity.get('Arn')}")
         print(f"    UserId:   {identity.get('UserId')}")
-        print("\nAWS SecureOps is ready.")
         
     except botocore.exceptions.ProfileNotFound:
         print(f"\n[-] Error: The AWS profile '{profile}' was not found.")
@@ -42,6 +60,33 @@ def main():
     except Exception as e:
         print(f"\n[-] Unexpected Error: {e}")
         sys.exit(1)
+
+    print("\nStarting IAM Scan...")
+    findings = scan_iam(session)
+    
+    if not findings:
+        print("\n[+] Scan completed. No security findings discovered!")
+        return
+
+    # Count severities
+    counts = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0}
+    for f in findings:
+        sev = f.get("severity")
+        if sev in counts:
+            counts[sev] += 1
+            
+    print(f"\nScan completed. Found {len(findings)} issues:")
+    for idx, finding in enumerate(findings, 1):
+        print_finding(idx, finding)
+        
+    print("-" * 60)
+    print("\nScan Summary:")
+    print(f"  CRITICAL: {counts['CRITICAL']}")
+    print(f"  HIGH:     {counts['HIGH']}")
+    print(f"  MEDIUM:   {counts['MEDIUM']}")
+    print(f"  LOW:      {counts['LOW']}")
+    print(f"  Total:    {len(findings)}")
+    print("=" * 60)
 
 if __name__ == "__main__":
     main()
