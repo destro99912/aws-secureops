@@ -1,0 +1,18 @@
+# Virtual environment
+.venv/
+venv/
+ENV/
+
+# Python cache & compiled files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Environment variables / local configuration
+.env
+.env.local
+
+# AWS SecureOps Outputs
+output/*.json
+output/*.html
