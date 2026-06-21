@@ -2,6 +2,7 @@ import sys
 import botocore.exceptions
 from core.aws_session import get_aws_session
 from scanners.iam_scanner import scan_iam
+from scanners.s3_scanner import scan_s3
 
 def print_finding(index, finding):
     severity_colors = {
@@ -62,21 +63,26 @@ def main():
         sys.exit(1)
 
     print("\nStarting IAM Scan...")
-    findings = scan_iam(session)
+    iam_findings = scan_iam(session)
     
-    if not findings:
+    print("\nStarting S3 Scan...")
+    s3_findings = scan_s3(session)
+    
+    all_findings = iam_findings + s3_findings
+    
+    if not all_findings:
         print("\n[+] Scan completed. No security findings discovered!")
         return
 
     # Count severities
     counts = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0}
-    for f in findings:
+    for f in all_findings:
         sev = f.get("severity")
         if sev in counts:
             counts[sev] += 1
             
-    print(f"\nScan completed. Found {len(findings)} issues:")
-    for idx, finding in enumerate(findings, 1):
+    print(f"\nScan completed. Found {len(all_findings)} issues:")
+    for idx, finding in enumerate(all_findings, 1):
         print_finding(idx, finding)
         
     print("-" * 60)
@@ -85,7 +91,7 @@ def main():
     print(f"  HIGH:     {counts['HIGH']}")
     print(f"  MEDIUM:   {counts['MEDIUM']}")
     print(f"  LOW:      {counts['LOW']}")
-    print(f"  Total:    {len(findings)}")
+    print(f"  Total:    {len(all_findings)}")
     print("=" * 60)
 
 if __name__ == "__main__":
