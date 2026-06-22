@@ -3,6 +3,8 @@ import botocore.exceptions
 from core.aws_session import get_aws_session
 from scanners.iam_scanner import scan_iam
 from scanners.s3_scanner import scan_s3
+from scanners.cloudtrail_scanner import scan_cloudtrail
+from scanners.config_scanner import scan_config
 
 def print_finding(index, finding):
     severity_colors = {
@@ -68,7 +70,13 @@ def main():
     print("\nStarting S3 Scan...")
     s3_findings = scan_s3(session)
     
-    all_findings = iam_findings + s3_findings
+    print("\nStarting CloudTrail Scan...")
+    cloudtrail_findings = scan_cloudtrail(session)
+    
+    print("\nStarting AWS Config Scan...")
+    config_findings = scan_config(session)
+    
+    all_findings = iam_findings + s3_findings + cloudtrail_findings + config_findings
     
     if not all_findings:
         print("\n[+] Scan completed. No security findings discovered!")
