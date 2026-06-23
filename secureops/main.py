@@ -8,6 +8,7 @@ from scanners.config_scanner import scan_config
 from scanners.guardduty_scanner import scan_guardduty
 from scanners.securityhub_scanner import scan_securityhub
 from scanners.inspector_scanner import scan_inspector
+from scanners.kms_scanner import scan_kms
 
 def print_finding(index, finding):
     severity_colors = {
@@ -88,7 +89,10 @@ def main():
     print("\nStarting Amazon Inspector Scan...")
     inspector_findings = scan_inspector(session)
     
-    all_findings = iam_findings + s3_findings + cloudtrail_findings + config_findings + guardduty_findings + securityhub_findings + inspector_findings
+    print("\nStarting KMS Scan...")
+    kms_findings = scan_kms(session)
+    
+    all_findings = iam_findings + s3_findings + cloudtrail_findings + config_findings + guardduty_findings + securityhub_findings + inspector_findings + kms_findings
     
     if not all_findings:
         print("\n[+] Scan completed. No security findings discovered!")
