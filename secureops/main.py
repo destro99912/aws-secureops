@@ -5,6 +5,9 @@ from scanners.iam_scanner import scan_iam
 from scanners.s3_scanner import scan_s3
 from scanners.cloudtrail_scanner import scan_cloudtrail
 from scanners.config_scanner import scan_config
+from scanners.guardduty_scanner import scan_guardduty
+from scanners.securityhub_scanner import scan_securityhub
+from scanners.inspector_scanner import scan_inspector
 
 def print_finding(index, finding):
     severity_colors = {
@@ -76,7 +79,16 @@ def main():
     print("\nStarting AWS Config Scan...")
     config_findings = scan_config(session)
     
-    all_findings = iam_findings + s3_findings + cloudtrail_findings + config_findings
+    print("\nStarting GuardDuty Scan...")
+    guardduty_findings = scan_guardduty(session)
+    
+    print("\nStarting Security Hub Scan...")
+    securityhub_findings = scan_securityhub(session)
+    
+    print("\nStarting Amazon Inspector Scan...")
+    inspector_findings = scan_inspector(session)
+    
+    all_findings = iam_findings + s3_findings + cloudtrail_findings + config_findings + guardduty_findings + securityhub_findings + inspector_findings
     
     if not all_findings:
         print("\n[+] Scan completed. No security findings discovered!")
