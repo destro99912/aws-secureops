@@ -10,7 +10,10 @@ AWS SecureOps is being built in public. Every scanner is implemented after study
 
 - **Scanner execution output**:
 - **Findings summary**: 
-- **Architecture diagram**:
+  ````markdown
+### Architecture diagram
+
+```text
                       AWS Account
                          │
                 AWS SecureOps Scanner
@@ -28,7 +31,7 @@ AWS SecureOps is being built in public. Every scanner is implemented after study
                     Console Output
 
 ---
-
+```
 ## Features
 
 - **Strictly Read-Only**: Performs only read/describe operations. Never modifies any resources or configurations in your AWS account.
