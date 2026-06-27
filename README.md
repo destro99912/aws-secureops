@@ -10,7 +10,22 @@ AWS SecureOps is being built in public. Every scanner is implemented after study
 
 - **Scanner execution output**:
 - **Findings summary**: 
-- **Architecture diagram**: 
+- **Architecture diagram**:
+                      AWS Account
+                         │
+                AWS SecureOps Scanner
+                         │
+ ┌───────────────┬───────────────┬───────────────┐
+ │               │               │               │
+ IAM             S3          CloudTrail      Config
+ │               │               │               │
+ GuardDuty   Security Hub   Inspector        KMS
+                         │
+                  Security Groups
+                         │
+                    Findings Engine
+                         │
+                    Console Output
 
 ---
 
