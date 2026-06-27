@@ -8,8 +8,17 @@ AWS SecureOps is being built in public. Every scanner is implemented after study
 
 ## Screenshots
 
-- **Scanner execution output**:
-- **Findings summary**: 
+### Scanner execution output
+
+![Scanner execution output](docs/images/start-scan.png)
+
+### Findings summary
+
+![Findings summary](docs/images/scan-summary.png)
+
+### Scan completed with findings
+
+![Scan completed with findings](docs/images/scan-completed.png)
 
 ### Architecture diagram
 
