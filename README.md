@@ -6,6 +6,18 @@ AWS SecureOps is being built in public. Every scanner is implemented after study
 
 ---
 
+## Why AWS SecureOps?
+
+AWS SecureOps was created to bridge the gap between learning AWS security concepts and implementing them in real-world security tooling.
+
+Most open-source cloud security tools focus only on producing findings. AWS SecureOps focuses on both education and practical cloud security engineering.
+
+Every scanner is implemented only after studying the AWS service, understanding its security implications, and translating that knowledge into automated read-only posture assessment checks.
+
+The long-term vision is to create a community-driven AWS security learning platform that helps cloud engineers understand AWS security while contributing to an open-source project.
+
+---
+
 ## Screenshots
 
 ### Scanner execution output
@@ -141,7 +153,7 @@ To run the full suite of scanners, your IAM identity needs the following read-on
 
 1. **Clone the repository**:
    ```bash
-   git clone https://github.com/yourusername/aws-secureops.git
+   git clone https://github.com/destro99912/aws-secureops.git
    cd aws-secureops
    ```
 
@@ -243,6 +255,12 @@ Contributions are welcome! Please read [CONTRIBUTING.md](file:///d:/Projects/AWS
 
 ---
 
+## Vision
+
+AWS SecureOps is built with continuous growth in mind. The project aims to steadily scale by adding new AWS service scanners, compliance validations, reporting extensions, and automated advice while remaining thoroughly educational, highly accessible, and beginner friendly.
+
+---
+
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](file:///d:/Projects/AWS%20Secure%20OPS%20project/LICENSE) file for details.
@@ -253,3 +271,13 @@ This project is licensed under the MIT License - see the [LICENSE](file:///d:/Pr
 
 > [!WARNING]
 > AWS SecureOps is designed as an educational posture auditing utility. It is not an official auditing tool and does not guarantee compliance with any standard or certify security completeness. Always verify scanner results against the official AWS Management Console or AWS CLI.
+
+---
+
+## Recommended GitHub Repository Settings
+
+**Repository Description**:
+An open-source, educational AWS Cloud Security Posture Assessment framework built with Python and boto3.
+
+**Suggested GitHub Topics**:
+`aws`, `aws-security`, `cloud-security`, `boto3`, `python`, `devsecops`, `security`, `opensource`, `aws-config`, `guardduty`, `securityhub`, `cloud`
