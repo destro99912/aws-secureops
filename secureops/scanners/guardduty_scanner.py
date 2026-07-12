@@ -1,6 +1,8 @@
 import botocore.exceptions
+from core.models import Finding
+from core.errors import create_permission_finding
 
-def scan_guardduty(session):
+def scan_guardduty(session) -> list[Finding]:
     """
     Scans GuardDuty findings and detector status. Does not modify any resources.
     
@@ -8,21 +10,21 @@ def scan_guardduty(session):
         session (boto3.Session): An active boto3 session.
         
     Returns:
-        list: A list of dict findings representing security issues.
+        list[Finding]: A list of Finding objects representing security issues.
     """
-    findings = []
+    findings: list[Finding] = []
     
     try:
         client = session.client("guardduty")
     except Exception as e:
-        findings.append({
-            "service": "GuardDuty",
-            "severity": "CRITICAL",
-            "title": "Could Not Initialize GuardDuty Client",
-            "resource": "GuardDuty Service",
-            "evidence": str(e),
-            "recommendation": "Verify your AWS session, credentials, and region config."
-        })
+        findings.append(Finding(
+            service="GuardDuty",
+            severity="CRITICAL",
+            title="Could Not Initialize GuardDuty Client",
+            resource="GuardDuty Service",
+            evidence=str(e),
+            recommendation="Verify your AWS session, credentials, and region config."
+        ))
         return findings
 
     detector_ids = []
@@ -32,56 +34,56 @@ def scan_guardduty(session):
     except botocore.exceptions.ClientError as e:
         error_code = e.response.get("Error", {}).get("Code", "")
         if error_code in ("AccessDenied", "AccessDeniedException"):
-            findings.append({
-                "service": "GuardDuty",
-                "severity": "HIGH",
-                "title": "Access Denied: List Detectors",
-                "resource": "GuardDuty Detectors",
-                "evidence": str(e),
-                "recommendation": "Ensure the scanner identity has 'guardduty:ListDetectors' permissions."
-            })
+            findings.append(create_permission_finding(
+                service="GuardDuty",
+                operation="List Detectors",
+                resource="GuardDuty Detectors",
+                required_permission="guardduty:ListDetectors",
+                error=e,
+                severity="HIGH"
+            ))
             return findings
         elif error_code == "SubscriptionRequiredException":
-            findings.append({
-                "service": "GuardDuty",
-                "severity": "CRITICAL",
-                "title": "GuardDuty Not Enabled",
-                "resource": "GuardDuty Config",
-                "evidence": "GuardDuty is not subscribed or enabled (SubscriptionRequiredException).",
-                "recommendation": "Enable Amazon GuardDuty to start monitoring for threats in your account."
-            })
+            findings.append(Finding(
+                service="GuardDuty",
+                severity="CRITICAL",
+                title="GuardDuty Not Enabled",
+                resource="GuardDuty Config",
+                evidence="GuardDuty is not subscribed or enabled (SubscriptionRequiredException).",
+                recommendation="Enable Amazon GuardDuty to start monitoring for threats in your account."
+            ))
             return findings
         else:
-            findings.append({
-                "service": "GuardDuty",
-                "severity": "MEDIUM",
-                "title": "Could Not List GuardDuty Detectors",
-                "resource": "GuardDuty Detectors",
-                "evidence": str(e),
-                "recommendation": "Investigate permissions or configurations for GuardDuty."
-            })
+            findings.append(create_permission_finding(
+                service="GuardDuty",
+                operation="List Detectors",
+                resource="GuardDuty Detectors",
+                required_permission="guardduty:ListDetectors",
+                error=e,
+                severity="MEDIUM"
+            ))
             return findings
     except Exception as e:
-        findings.append({
-            "service": "GuardDuty",
-            "severity": "MEDIUM",
-            "title": "Could Not List GuardDuty Detectors",
-            "resource": "GuardDuty Detectors",
-            "evidence": str(e),
-            "recommendation": "Investigate errors listing GuardDuty detectors."
-        })
+        findings.append(Finding(
+            service="GuardDuty",
+            severity="MEDIUM",
+            title="Could Not List GuardDuty Detectors",
+            resource="GuardDuty Detectors",
+            evidence=str(e),
+            recommendation="Investigate errors listing GuardDuty detectors."
+        ))
         return findings
 
     # 1. GuardDuty not enabled
     if not detector_ids:
-        findings.append({
-            "service": "GuardDuty",
-            "severity": "CRITICAL",
-            "title": "GuardDuty Not Enabled",
-            "resource": "GuardDuty Config",
-            "evidence": "No GuardDuty detectors found in this region.",
-            "recommendation": "Enable Amazon GuardDuty to start monitoring for threats in your account."
-        })
+        findings.append(Finding(
+            service="GuardDuty",
+            severity="CRITICAL",
+            title="GuardDuty Not Enabled",
+            resource="GuardDuty Config",
+            evidence="No GuardDuty detectors found in this region.",
+            recommendation="Enable Amazon GuardDuty to start monitoring for threats in your account."
+        ))
         return findings
 
     # For active detectors, retrieve findings
@@ -101,34 +103,34 @@ def scan_guardduty(session):
         except botocore.exceptions.ClientError as e:
             error_code = e.response.get("Error", {}).get("Code", "")
             if error_code in ("AccessDenied", "AccessDeniedException"):
-                findings.append({
-                    "service": "GuardDuty",
-                    "severity": "HIGH",
-                    "title": "Access Denied: List Findings",
-                    "resource": f"Detector: {detector_id}",
-                    "evidence": str(e),
-                    "recommendation": "Ensure the scanner identity has 'guardduty:ListFindings' permissions."
-                })
+                findings.append(create_permission_finding(
+                    service="GuardDuty",
+                    operation="List Findings",
+                    resource=f"Detector: {detector_id}",
+                    required_permission="guardduty:ListFindings",
+                    error=e,
+                    severity="HIGH"
+                ))
                 continue
             else:
-                findings.append({
-                    "service": "GuardDuty",
-                    "severity": "MEDIUM",
-                    "title": "Could Not List GuardDuty Findings",
-                    "resource": f"Detector: {detector_id}",
-                    "evidence": str(e),
-                    "recommendation": "Investigate errors listing findings for this detector."
-                })
+                findings.append(create_permission_finding(
+                    service="GuardDuty",
+                    operation="List Findings",
+                    resource=f"Detector: {detector_id}",
+                    required_permission="guardduty:ListFindings",
+                    error=e,
+                    severity="MEDIUM"
+                ))
                 continue
         except Exception as e:
-            findings.append({
-                "service": "GuardDuty",
-                "severity": "MEDIUM",
-                "title": "Could Not List GuardDuty Findings",
-                "resource": f"Detector: {detector_id}",
-                "evidence": str(e),
-                "recommendation": "Investigate errors listing findings for this detector."
-            })
+            findings.append(Finding(
+                service="GuardDuty",
+                severity="MEDIUM",
+                title="Could Not List GuardDuty Findings",
+                resource=f"Detector: {detector_id}",
+                evidence=str(e),
+                recommendation="Investigate errors listing findings for this detector."
+            ))
             continue
 
         if not finding_ids:
@@ -144,34 +146,34 @@ def scan_guardduty(session):
         except botocore.exceptions.ClientError as e:
             error_code = e.response.get("Error", {}).get("Code", "")
             if error_code in ("AccessDenied", "AccessDeniedException"):
-                findings.append({
-                    "service": "GuardDuty",
-                    "severity": "HIGH",
-                    "title": "Access Denied: Get Findings",
-                    "resource": f"Detector: {detector_id}",
-                    "evidence": str(e),
-                    "recommendation": "Ensure the scanner identity has 'guardduty:GetFindings' permissions."
-                })
+                findings.append(create_permission_finding(
+                    service="GuardDuty",
+                    operation="Get Findings",
+                    resource=f"Detector: {detector_id}",
+                    required_permission="guardduty:GetFindings",
+                    error=e,
+                    severity="HIGH"
+                ))
                 continue
             else:
-                findings.append({
-                    "service": "GuardDuty",
-                    "severity": "MEDIUM",
-                    "title": "Could Not Retrieve GuardDuty Findings Details",
-                    "resource": f"Detector: {detector_id}",
-                    "evidence": str(e),
-                    "recommendation": "Investigate errors retrieving details for GuardDuty findings."
-                })
+                findings.append(create_permission_finding(
+                    service="GuardDuty",
+                    operation="Get Findings",
+                    resource=f"Detector: {detector_id}",
+                    required_permission="guardduty:GetFindings",
+                    error=e,
+                    severity="MEDIUM"
+                ))
                 continue
         except Exception as e:
-            findings.append({
-                "service": "GuardDuty",
-                "severity": "MEDIUM",
-                "title": "Could Not Retrieve GuardDuty Findings Details",
-                "resource": f"Detector: {detector_id}",
-                "evidence": str(e),
-                "recommendation": "Investigate errors retrieving details for GuardDuty findings."
-            })
+            findings.append(Finding(
+                service="GuardDuty",
+                severity="MEDIUM",
+                title="Could Not Retrieve GuardDuty Findings Details",
+                resource=f"Detector: {detector_id}",
+                evidence=str(e),
+                recommendation="Investigate errors retrieving details for GuardDuty findings."
+            ))
             continue
 
         for finding in findings_details:
@@ -185,35 +187,35 @@ def scan_guardduty(session):
 
     # 2. Active HIGH severity GuardDuty findings
     if total_high > 0:
-        findings.append({
-            "service": "GuardDuty",
-            "severity": "HIGH",
-            "title": "Active High Severity GuardDuty Findings",
-            "resource": "GuardDuty Detector",
-            "evidence": f"Found {total_high} active high severity finding(s).",
-            "recommendation": "Investigate and resolve high severity GuardDuty findings immediately in the AWS Console."
-        })
+        findings.append(Finding(
+            service="GuardDuty",
+            severity="HIGH",
+            title="Active High Severity GuardDuty Findings",
+            resource="GuardDuty Detector",
+            evidence=f"Found {total_high} active high severity finding(s).",
+            recommendation="Investigate and resolve high severity GuardDuty findings immediately in the AWS Console."
+        ))
 
     # 3. Active MEDIUM severity GuardDuty findings
     if total_medium > 0:
-        findings.append({
-            "service": "GuardDuty",
-            "severity": "MEDIUM",
-            "title": "Active Medium Severity GuardDuty Findings",
-            "resource": "GuardDuty Detector",
-            "evidence": f"Found {total_medium} active medium severity finding(s).",
-            "recommendation": "Review and address active medium severity GuardDuty findings."
-        })
+        findings.append(Finding(
+            service="GuardDuty",
+            severity="MEDIUM",
+            title="Active Medium Severity GuardDuty Findings",
+            resource="GuardDuty Detector",
+            evidence=f"Found {total_medium} active medium severity finding(s).",
+            recommendation="Review and address active medium severity GuardDuty findings."
+        ))
 
     # 4. Active LOW severity GuardDuty findings
     if total_low > 0:
-        findings.append({
-            "service": "GuardDuty",
-            "severity": "LOW",
-            "title": "Active Low Severity GuardDuty Findings",
-            "resource": "GuardDuty Detector",
-            "evidence": f"Found {total_low} active low severity finding(s).",
-            "recommendation": "Review low severity GuardDuty findings during routine security maintenance."
-        })
+        findings.append(Finding(
+            service="GuardDuty",
+            severity="LOW",
+            title="Active Low Severity GuardDuty Findings",
+            resource="GuardDuty Detector",
+            evidence=f"Found {total_low} active low severity finding(s).",
+            recommendation="Review low severity GuardDuty findings during routine security maintenance."
+        ))
 
     return findings

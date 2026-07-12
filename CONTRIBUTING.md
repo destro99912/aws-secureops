@@ -34,19 +34,35 @@ secureops/
 When creating or updating a scanner, follow these rules:
 
 1. **Naming Conventions**: Name scanner files in snake_case ending with `_scanner.py` (e.g. `kms_scanner.py`).
-2. **Main Function**: Define a single entry point named `scan_<service>(session)` that takes a `boto3.Session` object.
-3. **Finding Dictionary Schema**: Every issue must return a dictionary conforming to the standard structure:
+2. **Main Function**: Define a single entry point named `scan_<service>(session) -> list[Finding]` that takes a `boto3.Session` object.
+3. **Finding Object Usage**: Every issue must return a typed `Finding` dataclass object. Import it from `core.models`:
    ```python
-   {
-       "service": "<Service Name>",
-       "severity": "CRITICAL" | "HIGH" | "MEDIUM" | "LOW",
-       "title": "<Short Descriptive Title>",
-       "resource": "<Resource ID or Name>",
-       "evidence": "<Details of the issue, e.g. Port Range, Policy statement>",
-       "recommendation": "<Actionable fix recommendation>"
-   }
+   from core.models import Finding
+   
+   Finding(
+       service="KMS",
+       severity="HIGH",
+       title="KMS Key Disabled",
+       resource="arn:aws:kms:...",
+       evidence="KMS key is currently disabled.",
+       recommendation="Review whether the key should remain disabled or be re-enabled if actively required."
+   )
    ```
-4. **Integration**: Update `secureops/main.py` to import and execute the new scanner, append findings to the consolidated list, and update summary outputs.
+4. **Handling Permission Errors**: If a read API call fails due to permission errors (e.g. `AccessDenied`), do not let the scanner crash. Standardize permission findings using the `create_permission_finding` helper from `core.errors`:
+   ```python
+   from core.errors import create_permission_finding
+   # Inside except botocore.exceptions.ClientError block
+   create_permission_finding(
+       service="KMS",
+       operation="List Keys",
+       resource="KMS Keys",
+       required_permission="kms:ListKeys",
+       error=e,
+       severity="HIGH"
+   )
+   ```
+5. **Unit Tests**: Every new scanner must be accompanied by mock-based tests under `tests/scanners/test_<service>_scanner.py`. Unit tests must leverage botocore's `Stubber` or `unittest.mock` to validate code flows without attempting live network connections.
+6. **Integration**: Update `secureops/main.py` to import and execute the new scanner, compiling its results into the console output engine.
 
 ## Pull Request Process
 

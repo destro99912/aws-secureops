@@ -12,34 +12,63 @@ from scanners.kms_scanner import scan_kms
 from scanners.securitygroup_scanner import scan_security_groups
 
 
-def print_finding(index, finding):
+from core.models import Finding
+
+def print_finding(index, finding: Finding):
     severity_colors = {
         "CRITICAL": "[CRITICAL]",
         "HIGH":     "[HIGH]    ",
         "MEDIUM":   "[MEDIUM]  ",
-        "LOW":      "[LOW]     "
+        "LOW":      "[LOW]     ",
+        "INFO":     "[INFO]    "
     }
     
-    sev = finding.get("severity", "INFO")
+    sev = finding.severity
     sev_str = severity_colors.get(sev, f"[{sev}]".ljust(10))
     
     print("-" * 60)
-    print(f"Finding #{index} - {sev_str} | Service: {finding.get('service')}")
-    print(f"Title:          {finding.get('title')}")
-    print(f"Resource:       {finding.get('resource')}")
-    print(f"Evidence:       {finding.get('evidence')}")
-    print(f"Recommendation: {finding.get('recommendation')}")
+    print(f"Finding #{index} - {sev_str} | Service: {finding.service}")
+    print(f"Title:          {finding.title}")
+    print(f"Resource:       {finding.resource}")
+    print(f"Evidence:       {finding.evidence}")
+    print(f"Recommendation: {finding.recommendation}")
 
 def main():
+    import argparse
+    import os
+    
+    parser = argparse.ArgumentParser(
+        description="AWS SecureOps - Cloud Security Posture Scanner",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python secureops/main.py
+  python secureops/main.py --profile secureops
+  python secureops/main.py --region us-east-1
+  python secureops/main.py --profile secureops --region us-east-1
+"""
+    )
+    parser.add_argument(
+        "--profile",
+        help="AWS CLI profile to use."
+    )
+    parser.add_argument(
+        "--region",
+        help="AWS region to scan."
+    )
+    
+    args = parser.parse_args()
+    
     print("=" * 60)
     print(" AWS SecureOps - Posture Scanner")
     print("=" * 60)
     
-    profile = "secureops"
+    profile = args.profile
+    region = args.region
     
     try:
-        # Initialize AWS session using the profile
-        session = get_aws_session(profile_name=profile)
+        # Initialize AWS session
+        session = get_aws_session(profile_name=profile, region_name=region)
         
         # Initialize the STS client to verify identity
         sts_client = session.client("sts")
@@ -51,19 +80,54 @@ def main():
         print(f"    UserId:   {identity.get('UserId')}")
         
     except botocore.exceptions.ProfileNotFound:
-        print(f"\n[-] Error: The AWS profile '{profile}' was not found.")
+        profile_str = profile if profile else os.environ.get("AWS_PROFILE", "default")
+        print(f"\n[-] Error: The AWS profile '{profile_str}' was not found.")
         print("    Please ensure you have configured this profile in your AWS credentials file.")
-        print(f"    You can create it by running: aws configure --profile {profile}")
+        print(f"    You can create it by running: aws configure --profile {profile_str}")
         sys.exit(1)
         
     except botocore.exceptions.NoCredentialsError:
         print("\n[-] Error: No AWS credentials could be found.")
         print("    Please set up your AWS credentials using the AWS CLI or environment variables.")
         sys.exit(1)
+
+    except botocore.exceptions.PartialCredentialsError as e:
+        print(f"\n[-] Error: Incomplete credentials configuration. {e}")
+        print("    Please ensure both AWS Access Key ID and Secret Access Key are provided.")
+        sys.exit(1)
+
+    except botocore.exceptions.UnknownRegionError as e:
+        print(f"\n[-] Error: The specified AWS region is invalid or unknown. {e}")
+        print("    Please verify the spelling of the region (e.g. 'us-east-1', 'eu-west-1').")
+        sys.exit(1)
+
+    except botocore.exceptions.EndpointConnectionError as e:
+        print(f"\n[-] Error: Could not connect to AWS endpoints. {e}")
+        print("    Please check your internet connection or verify if the region is correct and valid.")
+        sys.exit(1)
         
     except botocore.exceptions.ClientError as e:
-        print(f"\n[-] AWS Client Error: {e}")
-        print("    Please check if your credentials are valid and have not expired.")
+        error_code = e.response.get("Error", {}).get("Code", "")
+        print(f"\n[-] AWS Client Error ({error_code}):")
+        
+        if error_code == "InvalidClientTokenId":
+            print("    The AWS Access Key ID is invalid or security token is incorrect.")
+            print("    Please verify your keys in credentials config or environment variables.")
+        elif error_code in ("ExpiredToken", "RequestExpired"):
+            print("    The AWS security token/credentials have expired.")
+            print("    Please renew your session credentials (e.g., via AWS SSO or STS).")
+        elif error_code == "UnrecognizedClientException":
+            print("    The security token included in the request is unrecognized.")
+            print("    Please check if your account is active and credentials are correct.")
+        elif error_code in ("AccessDenied", "AccessDeniedException"):
+            print("    Access Denied to verify identity (STS GetCallerIdentity).")
+            print("    Ensure the IAM principal has permission to perform sts:GetCallerIdentity.")
+        elif error_code == "InvalidSignatureException":
+            print("    The request signature is invalid. Your Secret Access Key may be incorrect.")
+            print("    Please verify your secret key configuration.")
+        else:
+            print(f"    {e.response.get('Error', {}).get('Message', str(e))}")
+            print("    Please check your account permissions and credentials.")
         sys.exit(1)
         
     except Exception as e:
@@ -114,9 +178,9 @@ def main():
         return
 
     # Count severities
-    counts = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0}
+    counts = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0, "INFO": 0}
     for f in all_findings:
-        sev = f.get("severity")
+        sev = f.severity
         if sev in counts:
             counts[sev] += 1
             
@@ -130,6 +194,7 @@ def main():
     print(f"  HIGH:     {counts['HIGH']}")
     print(f"  MEDIUM:   {counts['MEDIUM']}")
     print(f"  LOW:      {counts['LOW']}")
+    print(f"  INFO:     {counts['INFO']}")
     print(f"  Total:    {len(all_findings)}")
     print("=" * 60)
 

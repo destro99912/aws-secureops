@@ -85,7 +85,8 @@ The project has a flat and straightforward design tailored for learning and fast
 ```text
 secureops/
 ├── core/
-│   └── aws_session.py        # Connects to AWS using the specified profile
+│   ├── aws_session.py        # Connects to AWS using standard provider chain
+│   └── models.py             # Contains Finding dataclass
 ├── scanners/                 # Individual service scanners
 │   ├── cloudtrail_scanner.py
 │   ├── config_scanner.py
@@ -99,13 +100,19 @@ secureops/
 └── main.py                   # Main script orchestrating all scans
 ```
 
+### Architectural Principles
+* **Finding Dataclass**: A typed structure representing a security vulnerability. Avoids messy dictionaries and enforces consistent output formatting across all scanner modules.
+* **Read-Only Philosophy**: The framework executes only non-destructive API queries. It never creates, deletes, or alters your AWS resources.
+* **Modular Scanner Design**: Each AWS service has a dedicated script under `scanners/` containing its posture checks. This keeps code straightforward and extremely simple to read.
+* **Unit Testing Approach**: We use python's built-in `unittest.mock` and botocore's `Stubber` to validate scanner outputs against mock AWS responses, validating code without requiring live network access or active credentials.
+
 ---
 
 ## Requirements
 
 - Python 3.8+
 - Active AWS account
-- Configured AWS CLI profile with read-only security permissions
+- Configured AWS credentials (or access keys)
 
 ---
 
@@ -167,23 +174,35 @@ To run the full suite of scanners, your IAM identity needs the following read-on
    ```
 
 3. **Install dependencies**:
-   ```bash
-   pip install -r requirements.txt
-   ```
+   * For standard runtime execution:
+     ```bash
+     pip install -r requirements.txt
+     ```
+   * For testing and development checks:
+     ```bash
+     pip install -r requirements-dev.txt
+     ```
 
 ---
 
 ## Usage
 
-Configure your target AWS CLI profile (default profile name used is `secureops`):
+AWS SecureOps utilizes boto3's standard credential provider chain. If no arguments are passed, it automatically resolves credentials from environment variables (`AWS_PROFILE`, `AWS_ACCESS_KEY_ID`, etc.), instance profiles, or shared configuration files.
+
+You can explicitly configure CLI execution using optional command-line arguments:
 
 ```bash
-aws configure --profile secureops
-```
-
-Run the orchestrator:
-```bash
+# Run using standard credential resolution chain:
 python secureops/main.py
+
+# Run targeting an explicit AWS profile:
+python secureops/main.py --profile secureops
+
+# Run targeting an explicit AWS region:
+python secureops/main.py --region us-east-1
+
+# Run targeting both explicit profile and region:
+python secureops/main.py --profile secureops --region us-east-1
 ```
 
 ---

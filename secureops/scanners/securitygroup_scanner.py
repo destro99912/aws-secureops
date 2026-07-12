@@ -1,6 +1,8 @@
 import botocore.exceptions
+from core.models import Finding
+from core.errors import create_permission_finding
 
-def scan_security_groups(session):
+def scan_security_groups(session) -> list[Finding]:
     """
     Scans AWS Security Groups for security posture issues. Does not modify any resources.
     
@@ -8,22 +10,22 @@ def scan_security_groups(session):
         session (boto3.Session): An active boto3 session.
         
     Returns:
-        list: A list of dict findings representing security issues.
+        list[Finding]: A list of Finding objects representing security issues.
     """
-    findings = []
+    findings: list[Finding] = []
     service_name = "EC2 Security Groups"
     
     try:
         client = session.client("ec2")
     except Exception as e:
-        findings.append({
-            "service": service_name,
-            "severity": "CRITICAL",
-            "title": "Could Not Initialize EC2 Client",
-            "resource": "EC2 Service",
-            "evidence": str(e),
-            "recommendation": "Verify your AWS session, credentials, and region config."
-        })
+        findings.append(Finding(
+            service=service_name,
+            severity="CRITICAL",
+            title="Could Not Initialize EC2 Client",
+            resource="EC2 Service",
+            evidence=str(e),
+            recommendation="Verify your AWS session, credentials, and region config."
+        ))
         return findings
 
     # Step 1: Collect all security groups in use by Network Interfaces (to find unused ones)
@@ -38,36 +40,35 @@ def scan_security_groups(session):
                         in_use_sg_ids.add(group["GroupId"])
     except botocore.exceptions.ClientError as e:
         error_code = e.response.get("Error", {}).get("Code", "")
+        has_eni_permission = False
         if error_code in ("AccessDenied", "UnauthorizedOperation"):
-            has_eni_permission = False
-            findings.append({
-                "service": service_name,
-                "severity": "MEDIUM",
-                "title": "Access Denied: Describe Network Interfaces",
-                "resource": "Network Interfaces",
-                "evidence": str(e),
-                "recommendation": "Ensure the scanner identity has 'ec2:DescribeNetworkInterfaces' permissions to scan for unused security groups."
-            })
+            findings.append(create_permission_finding(
+                service=service_name,
+                operation="Describe Network Interfaces",
+                resource="Network Interfaces",
+                required_permission="ec2:DescribeNetworkInterfaces",
+                error=e,
+                severity="MEDIUM"
+            ))
         else:
-            has_eni_permission = False
-            findings.append({
-                "service": service_name,
-                "severity": "MEDIUM",
-                "title": "Could Not Describe Network Interfaces",
-                "resource": "Network Interfaces",
-                "evidence": str(e),
-                "recommendation": "Ensure correct EC2 permissions to check for network interfaces."
-            })
+            findings.append(Finding(
+                service=service_name,
+                severity="MEDIUM",
+                title="Could Not Describe Network Interfaces",
+                resource="Network Interfaces",
+                evidence=str(e),
+                recommendation="Ensure correct EC2 permissions to check for network interfaces."
+            ))
     except Exception as e:
         has_eni_permission = False
-        findings.append({
-            "service": service_name,
-            "severity": "MEDIUM",
-            "title": "Could Not Describe Network Interfaces",
-            "resource": "Network Interfaces",
-            "evidence": str(e),
-            "recommendation": "Investigate errors describing Network Interfaces."
-        })
+        findings.append(Finding(
+            service=service_name,
+            severity="MEDIUM",
+            title="Could Not Describe Network Interfaces",
+            resource="Network Interfaces",
+            evidence=str(e),
+            recommendation="Investigate errors describing Network Interfaces."
+        ))
 
     # Step 2: List and scan Security Groups
     security_groups = []
@@ -78,33 +79,33 @@ def scan_security_groups(session):
     except botocore.exceptions.ClientError as e:
         error_code = e.response.get("Error", {}).get("Code", "")
         if error_code in ("AccessDenied", "UnauthorizedOperation"):
-            findings.append({
-                "service": service_name,
-                "severity": "HIGH",
-                "title": "Access Denied: Describe Security Groups",
-                "resource": "Security Groups",
-                "evidence": str(e),
-                "recommendation": "Ensure the scanner identity has 'ec2:DescribeSecurityGroups' permissions."
-            })
+            findings.append(create_permission_finding(
+                service=service_name,
+                operation="Describe Security Groups",
+                resource="Security Groups",
+                required_permission="ec2:DescribeSecurityGroups",
+                error=e,
+                severity="HIGH"
+            ))
         else:
-            findings.append({
-                "service": service_name,
-                "severity": "MEDIUM",
-                "title": "Could Not Describe Security Groups",
-                "resource": "Security Groups",
-                "evidence": str(e),
-                "recommendation": "Ensure correct EC2 permissions."
-            })
+            findings.append(Finding(
+                service=service_name,
+                severity="MEDIUM",
+                title="Could Not Describe Security Groups",
+                resource="Security Groups",
+                evidence=str(e),
+                recommendation="Ensure correct EC2 permissions."
+            ))
         return findings
     except Exception as e:
-        findings.append({
-            "service": service_name,
-            "severity": "MEDIUM",
-            "title": "Could Not Describe Security Groups",
-            "resource": "Security Groups",
-            "evidence": str(e),
-            "recommendation": "Investigate errors listing security groups."
-        })
+        findings.append(Finding(
+            service=service_name,
+            severity="MEDIUM",
+            title="Could Not Describe Security Groups",
+            resource="Security Groups",
+            evidence=str(e),
+            recommendation="Investigate errors listing security groups."
+        ))
         return findings
 
     db_ports = {
@@ -124,14 +125,14 @@ def scan_security_groups(session):
             
             # Check 5: Unused Security Group
             if has_eni_permission and sg_id not in in_use_sg_ids:
-                findings.append({
-                    "service": service_name,
-                    "severity": "LOW",
-                    "title": "Unused Security Group",
-                    "resource": resource_name,
-                    "evidence": "Security group is not attached to any network interface in the region.",
-                    "recommendation": "Review and remove unused security groups to maintain a clean and secure AWS environment."
-                })
+                findings.append(Finding(
+                    service=service_name,
+                    severity="LOW",
+                    title="Unused Security Group",
+                    resource=resource_name,
+                    evidence="Security group is not attached to any network interface in the region.",
+                    recommendation="Review and remove unused security groups to maintain a clean and secure AWS environment."
+                ))
 
             # Check rules
             for rule in sg.get("IpPermissions", []):
@@ -157,14 +158,14 @@ def scan_security_groups(session):
                 
                 # Check 3: All Traffic Open To Internet
                 if ip_protocol == "-1":
-                    findings.append({
-                        "service": service_name,
-                        "severity": "CRITICAL",
-                        "title": "All Traffic Open To Internet",
-                        "resource": resource_name,
-                        "evidence": f"Protocol: All Traffic, Source: {sources_str}",
-                        "recommendation": "Limit security group rules to only the required ports and protocols from specific trusted sources."
-                    })
+                    findings.append(Finding(
+                        service=service_name,
+                        severity="CRITICAL",
+                        title="All Traffic Open To Internet",
+                        resource=resource_name,
+                        evidence=f"Protocol: All Traffic, Source: {sources_str}",
+                        recommendation="Limit security group rules to only the required ports and protocols from specific trusted sources."
+                    ))
                     # Skip check of individual ports if all traffic is open
                     continue
 
@@ -177,47 +178,47 @@ def scan_security_groups(session):
 
                     # Check 1: SSH Open To Internet
                     if is_port_in_range(22):
-                        findings.append({
-                            "service": service_name,
-                            "severity": "HIGH",
-                            "title": "SSH Open To Internet",
-                            "resource": resource_name,
-                            "evidence": f"Protocol: TCP, Port Range: {from_port}-{to_port}, Source: {sources_str}",
-                            "recommendation": "Restrict inbound port 22 access to specific trusted IP ranges instead of the entire internet."
-                        })
+                        findings.append(Finding(
+                            service=service_name,
+                            severity="HIGH",
+                            title="SSH Open To Internet",
+                            resource=resource_name,
+                            evidence=f"Protocol: TCP, Port Range: {from_port}-{to_port}, Source: {sources_str}",
+                            recommendation="Restrict inbound port 22 access to specific trusted IP ranges instead of the entire internet."
+                        ))
                     
                     # Check 2: RDP Open To Internet
                     if is_port_in_range(3389):
-                        findings.append({
-                            "service": service_name,
-                            "severity": "HIGH",
-                            "title": "RDP Open To Internet",
-                            "resource": resource_name,
-                            "evidence": f"Protocol: TCP, Port Range: {from_port}-{to_port}, Source: {sources_str}",
-                            "recommendation": "Restrict inbound port 3389 access to specific trusted IP ranges instead of the entire internet."
-                        })
+                        findings.append(Finding(
+                            service=service_name,
+                            severity="HIGH",
+                            title="RDP Open To Internet",
+                            resource=resource_name,
+                            evidence=f"Protocol: TCP, Port Range: {from_port}-{to_port}, Source: {sources_str}",
+                            recommendation="Restrict inbound port 3389 access to specific trusted IP ranges instead of the entire internet."
+                        ))
 
                     # Check 4: Database Port Open To Internet
                     for db_port, db_name in db_ports.items():
                         if is_port_in_range(db_port):
-                            findings.append({
-                                "service": service_name,
-                                "severity": "CRITICAL",
-                                "title": "Database Port Open To Internet",
-                                "resource": resource_name,
-                                "evidence": f"Protocol: TCP, Port Range: {from_port}-{to_port} (contains {db_name} port {db_port}), Source: {sources_str}",
-                                "recommendation": f"Restrict database port access to authorized application security groups or specific trusted IP ranges."
-                            })
+                            findings.append(Finding(
+                                service=service_name,
+                                severity="CRITICAL",
+                                title="Database Port Open To Internet",
+                                resource=resource_name,
+                                evidence=f"Protocol: TCP, Port Range: {from_port}-{to_port} (contains {db_name} port {db_port}), Source: {sources_str}",
+                                recommendation="Restrict database port access to authorized application security groups or specific trusted IP ranges."
+                            ))
                             
         except Exception as e:
             # Handle failure on one security group gracefully without stopping the scan
-            findings.append({
-                "service": service_name,
-                "severity": "LOW",
-                "title": "Error Scanning Security Group",
-                "resource": sg.get("GroupId", "Unknown SG"),
-                "evidence": str(e),
-                "recommendation": "Investigate execution errors for this security group."
-            })
+            findings.append(Finding(
+                service=service_name,
+                severity="LOW",
+                title="Error Scanning Security Group",
+                resource=sg.get("GroupId", "Unknown SG"),
+                evidence=str(e),
+                recommendation="Investigate execution errors for this security group."
+            ))
             
     return findings

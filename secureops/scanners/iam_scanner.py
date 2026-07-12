@@ -1,7 +1,9 @@
 from datetime import datetime, timezone
 import botocore.exceptions
+from core.models import Finding
+from core.errors import create_permission_finding
 
-def scan_iam(session):
+def scan_iam(session) -> list[Finding]:
     """
     Scans IAM posture on AWS. Does not modify any resources.
     
@@ -9,21 +11,21 @@ def scan_iam(session):
         session (boto3.Session): An active boto3 session.
         
     Returns:
-        list: A list of dict findings representing security issues.
+        list[Finding]: A list of Finding objects representing security issues.
     """
-    findings = []
+    findings: list[Finding] = []
     
     try:
         client = session.client("iam")
     except Exception as e:
-        findings.append({
-            "service": "IAM",
-            "severity": "CRITICAL",
-            "title": "Could Not Initialize IAM Client",
-            "resource": "IAM Service",
-            "evidence": str(e),
-            "recommendation": "Verify your AWS session, credentials, and region config."
-        })
+        findings.append(Finding(
+            service="IAM",
+            severity="CRITICAL",
+            title="Could Not Initialize IAM Client",
+            resource="IAM Service",
+            evidence=str(e),
+            recommendation="Verify your AWS session, credentials, and region config."
+        ))
         return findings
 
     # F. Check account summary (Root MFA status)
@@ -32,23 +34,43 @@ def scan_iam(session):
         summary_map = summary.get("SummaryMap", {})
         mfa_enabled = summary_map.get("AccountMFAEnabled", 0)
         if mfa_enabled == 0:
-            findings.append({
-                "service": "IAM",
-                "severity": "CRITICAL",
-                "title": "Root Account MFA Missing",
-                "resource": "Root Account",
-                "evidence": "AccountMFAEnabled is 0",
-                "recommendation": "Enable Multi-Factor Authentication (MFA) on the root account immediately."
-            })
+            findings.append(Finding(
+                service="IAM",
+                severity="CRITICAL",
+                title="Root Account MFA Missing",
+                resource="Root Account",
+                evidence="AccountMFAEnabled is 0",
+                recommendation="Enable Multi-Factor Authentication (MFA) on the root account immediately."
+            ))
+    except botocore.exceptions.ClientError as e:
+        error_code = e.response.get("Error", {}).get("Code", "")
+        if error_code in ("AccessDenied", "AccessDeniedException"):
+            findings.append(create_permission_finding(
+                service="IAM",
+                operation="Get Account Summary",
+                resource="Account Summary",
+                required_permission="iam:GetAccountSummary",
+                error=e,
+                severity="MEDIUM"
+            ))
+        else:
+            findings.append(Finding(
+                service="IAM",
+                severity="MEDIUM",
+                title="Could Not Retrieve Account Summary",
+                resource="Account Summary",
+                evidence=str(e),
+                recommendation="Ensure the scanner identity has 'iam:GetAccountSummary' permissions."
+            ))
     except Exception as e:
-        findings.append({
-            "service": "IAM",
-            "severity": "MEDIUM",
-            "title": "Could Not Retrieve Account Summary",
-            "resource": "Account Summary",
-            "evidence": str(e),
-            "recommendation": "Ensure the scanner identity has 'iam:GetAccountSummary' permissions."
-        })
+        findings.append(Finding(
+            service="IAM",
+            severity="MEDIUM",
+            title="Could Not Retrieve Account Summary",
+            resource="Account Summary",
+            evidence=str(e),
+            recommendation="Ensure the scanner identity has 'iam:GetAccountSummary' permissions."
+        ))
 
     # A. List all IAM users
     users = []
@@ -56,15 +78,36 @@ def scan_iam(session):
         paginator = client.get_paginator('list_users')
         for page in paginator.paginate():
             users.extend(page.get('Users', []))
+    except botocore.exceptions.ClientError as e:
+        error_code = e.response.get("Error", {}).get("Code", "")
+        if error_code in ("AccessDenied", "AccessDeniedException"):
+            findings.append(create_permission_finding(
+                service="IAM",
+                operation="List IAM Users",
+                resource="IAM Users List",
+                required_permission="iam:ListUsers",
+                error=e,
+                severity="HIGH"
+            ))
+        else:
+            findings.append(Finding(
+                service="IAM",
+                severity="HIGH",
+                title="Could Not List IAM Users",
+                resource="IAM Users List",
+                evidence=str(e),
+                recommendation="Ensure the scanner identity has 'iam:ListUsers' permissions."
+            ))
+        return findings
     except Exception as e:
-        findings.append({
-            "service": "IAM",
-            "severity": "HIGH",
-            "title": "Could Not List IAM Users",
-            "resource": "IAM Users List",
-            "evidence": str(e),
-            "recommendation": "Ensure the scanner identity has 'iam:ListUsers' permissions."
-        })
+        findings.append(Finding(
+            service="IAM",
+            severity="HIGH",
+            title="Could Not List IAM Users",
+            resource="IAM Users List",
+            evidence=str(e),
+            recommendation="Ensure the scanner identity has 'iam:ListUsers' permissions."
+        ))
         return findings
 
     # Scan each user
@@ -89,37 +132,57 @@ def scan_iam(session):
             if has_console_access:
                 mfa = client.list_mfa_devices(UserName=username)
                 if not mfa.get('MFADevices', []):
-                    findings.append({
-                        "service": "IAM",
-                        "severity": "MEDIUM",
-                        "title": "MFA Not Enabled for User",
-                        "resource": f"User: {username}",
-                        "evidence": "User has AWS Console access but no MFA devices configured.",
-                        "recommendation": "Require this user to configure Multi-Factor Authentication (MFA) for AWS Console login."
-                    })
+                    findings.append(Finding(
+                        service="IAM",
+                        severity="MEDIUM",
+                        title="MFA Not Enabled for User",
+                        resource=f"User: {username}",
+                        evidence="User has AWS Console access but no MFA devices configured.",
+                        recommendation="Require this user to configure Multi-Factor Authentication (MFA) for AWS Console login."
+                    ))
+        except botocore.exceptions.ClientError as e:
+            error_code = e.response.get("Error", {}).get("Code", "")
+            if error_code in ("AccessDenied", "AccessDeniedException"):
+                findings.append(create_permission_finding(
+                    service="IAM",
+                    operation=f"List MFA Devices for User {username}",
+                    resource=f"User: {username}",
+                    required_permission="iam:ListMFADevices",
+                    error=e,
+                    severity="LOW"
+                ))
+            else:
+                findings.append(Finding(
+                    service="IAM",
+                    severity="LOW",
+                    title="Could Not List MFA Devices for User",
+                    resource=f"User: {username}",
+                    evidence=str(e),
+                    recommendation="Ensure the scanner identity has 'iam:ListMFADevices' and 'iam:GetLoginProfile' permissions."
+                ))
         except Exception as e:
-            findings.append({
-                "service": "IAM",
-                "severity": "LOW",
-                "title": "Could Not List MFA Devices for User",
-                "resource": f"User: {username}",
-                "evidence": str(e),
-                "recommendation": "Ensure the scanner identity has 'iam:ListMFADevices' and 'iam:GetLoginProfile' permissions."
-            })
+            findings.append(Finding(
+                service="IAM",
+                severity="LOW",
+                title="Could Not List MFA Devices for User",
+                resource=f"User: {username}",
+                evidence=str(e),
+                recommendation="Ensure the scanner identity has 'iam:ListMFADevices' and 'iam:GetLoginProfile' permissions."
+            ))
 
         # C & D. Check Access Keys and Key Age
         try:
             keys = client.list_access_keys(UserName=username)
             metadata = keys.get('AccessKeyMetadata', [])
             if metadata:
-                findings.append({
-                    "service": "IAM",
-                    "severity": "LOW",
-                    "title": "Active Access Keys Found",
-                    "resource": f"User: {username}",
-                    "evidence": f"User has {len(metadata)} active access key(s).",
-                    "recommendation": "Verify if programmatic access is necessary for this user. Deactivate/delete if unused."
-                })
+                findings.append(Finding(
+                    service="IAM",
+                    severity="LOW",
+                    title="Active Access Keys Found",
+                    resource=f"User: {username}",
+                    evidence=f"User has {len(metadata)} active access key(s).",
+                    recommendation="Verify if programmatic access is necessary for this user. Deactivate/delete if unused."
+                ))
                 
                 # Check age for each key
                 for key in metadata:
@@ -127,23 +190,43 @@ def scan_iam(session):
                     create_date = key['CreateDate']
                     age_days = (datetime.now(timezone.utc) - create_date).days
                     if age_days > 90:
-                        findings.append({
-                            "service": "IAM",
-                            "severity": "HIGH",
-                            "title": "Access Key Older Than 90 Days",
-                            "resource": f"User: {username} (Key ID: {key_id})",
-                            "evidence": f"Access key age is {age_days} days (Created: {create_date.strftime('%Y-%m-%d')}).",
-                            "recommendation": "Rotate programmatic access keys every 90 days."
-                        })
+                        findings.append(Finding(
+                            service="IAM",
+                            severity="HIGH",
+                            title="Access Key Older Than 90 Days",
+                            resource=f"User: {username} (Key ID: {key_id})",
+                            evidence=f"Access key age is {age_days} days (Created: {create_date.strftime('%Y-%m-%d')}).",
+                            recommendation="Rotate programmatic access keys every 90 days."
+                        ))
+        except botocore.exceptions.ClientError as e:
+            error_code = e.response.get("Error", {}).get("Code", "")
+            if error_code in ("AccessDenied", "AccessDeniedException"):
+                findings.append(create_permission_finding(
+                    service="IAM",
+                    operation=f"List Access Keys for User {username}",
+                    resource=f"User: {username}",
+                    required_permission="iam:ListAccessKeys",
+                    error=e,
+                    severity="LOW"
+                ))
+            else:
+                findings.append(Finding(
+                    service="IAM",
+                    severity="LOW",
+                    title="Could Not List Access Keys for User",
+                    resource=f"User: {username}",
+                    evidence=str(e),
+                    recommendation="Ensure the scanner identity has 'iam:ListAccessKeys' permissions."
+                ))
         except Exception as e:
-            findings.append({
-                "service": "IAM",
-                "severity": "LOW",
-                "title": "Could Not List Access Keys for User",
-                "resource": f"User: {username}",
-                "evidence": str(e),
-                "recommendation": "Ensure the scanner identity has 'iam:ListAccessKeys' permissions."
-            })
+            findings.append(Finding(
+                service="IAM",
+                severity="LOW",
+                title="Could Not List Access Keys for User",
+                resource=f"User: {username}",
+                evidence=str(e),
+                recommendation="Ensure the scanner identity has 'iam:ListAccessKeys' permissions."
+            ))
 
         # E. Check for AdministratorAccess directly attached
         try:
@@ -151,22 +234,42 @@ def scan_iam(session):
             attached = policies.get('AttachedPolicies', [])
             for policy in attached:
                 if policy['PolicyArn'] == 'arn:aws:iam::aws:policy/AdministratorAccess':
-                    findings.append({
-                        "service": "IAM",
-                        "severity": "HIGH",
-                        "title": "Directly Attached AdministratorAccess Policy",
-                        "resource": f"User: {username}",
-                        "evidence": "AdministratorAccess policy is directly attached to the user.",
-                        "recommendation": "Remove policies directly attached to users. Assign policies to IAM groups/roles instead."
-                    })
+                    findings.append(Finding(
+                        service="IAM",
+                        severity="HIGH",
+                        title="Directly Attached AdministratorAccess Policy",
+                        resource=f"User: {username}",
+                        evidence="AdministratorAccess policy is directly attached to the user.",
+                        recommendation="Remove policies directly attached to users. Assign policies to IAM groups/roles instead."
+                    ))
+        except botocore.exceptions.ClientError as e:
+            error_code = e.response.get("Error", {}).get("Code", "")
+            if error_code in ("AccessDenied", "AccessDeniedException"):
+                findings.append(create_permission_finding(
+                    service="IAM",
+                    operation=f"List Attached User Policies for User {username}",
+                    resource=f"User: {username}",
+                    required_permission="iam:ListAttachedUserPolicies",
+                    error=e,
+                    severity="LOW"
+                ))
+            else:
+                findings.append(Finding(
+                    service="IAM",
+                    severity="LOW",
+                    title="Could Not List Attached Policies for User",
+                    resource=f"User: {username}",
+                    evidence=str(e),
+                    recommendation="Ensure the scanner identity has 'iam:ListAttachedUserPolicies' permissions."
+                ))
         except Exception as e:
-            findings.append({
-                "service": "IAM",
-                "severity": "LOW",
-                "title": "Could Not List Attached Policies for User",
-                "resource": f"User: {username}",
-                "evidence": str(e),
-                "recommendation": "Ensure the scanner identity has 'iam:ListAttachedUserPolicies' permissions."
-            })
+            findings.append(Finding(
+                service="IAM",
+                severity="LOW",
+                title="Could Not List Attached Policies for User",
+                resource=f"User: {username}",
+                evidence=str(e),
+                recommendation="Ensure the scanner identity has 'iam:ListAttachedUserPolicies' permissions."
+            ))
 
     return findings

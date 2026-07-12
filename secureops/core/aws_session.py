@@ -1,14 +1,14 @@
 import boto3
+from boto3.session import Session
 
-def get_aws_session(profile_name="secureops", region_name="us-east-1"):
+def get_aws_session(
+    profile_name: str | None = None,
+    region_name: str | None = None,
+) -> Session:
     """
-    Creates and returns a boto3 Session using the specified AWS CLI profile and region.
+    Creates and returns a boto3 Session.
     
-    Args:
-        profile_name (str): The name of the AWS CLI profile to use.
-        region_name (str): The AWS region to associate with the session.
-        
-    Returns:
-        boto3.Session: A boto3 Session object configured with the specified profile and region.
+    If profile_name or region_name are omitted, boto3 resolves credentials and region
+    using its standard resolution chain (environment variables, config files, instance profiles, etc.).
     """
     return boto3.Session(profile_name=profile_name, region_name=region_name)
