@@ -51,7 +51,6 @@ The long-term vision is to create a community-driven AWS security learning platf
                          │
                     Console Output
 
----
 ```
 ## Features
 
