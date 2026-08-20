@@ -28,6 +28,8 @@ def scan_security_groups(session) -> list[Finding]:
         ))
         return findings
 
+    region = getattr(client.meta, "region_name", None)
+
     # Step 1: Collect all security groups in use by Network Interfaces (to find unused ones)
     in_use_sg_ids = set()
     has_eni_permission = True
@@ -155,7 +157,7 @@ def scan_security_groups(session) -> list[Finding]:
                 sources_str = ", ".join(public_sources)
                 from_port = rule.get("FromPort")
                 to_port = rule.get("ToPort")
-                
+
                 # Check 3: All Traffic Open To Internet
                 if ip_protocol == "-1":
                     findings.append(Finding(
@@ -169,13 +171,13 @@ def scan_security_groups(session) -> list[Finding]:
                     # Skip check of individual ports if all traffic is open
                     continue
 
-                if ip_protocol == "tcp":
-                    # Check range matches helper
-                    def is_port_in_range(port):
-                        if from_port is not None and to_port is not None:
-                            return from_port <= port <= to_port
-                        return False
+                # Check range matches helper
+                def is_port_in_range(port):
+                    if from_port is not None and to_port is not None:
+                        return from_port <= port <= to_port
+                    return False
 
+                if ip_protocol == "tcp":
                     # Check 1: SSH Open To Internet
                     if is_port_in_range(22):
                         findings.append(Finding(
@@ -186,7 +188,7 @@ def scan_security_groups(session) -> list[Finding]:
                             evidence=f"Protocol: TCP, Port Range: {from_port}-{to_port}, Source: {sources_str}",
                             recommendation="Restrict inbound port 22 access to specific trusted IP ranges instead of the entire internet."
                         ))
-                    
+
                     # Check 2: RDP Open To Internet
                     if is_port_in_range(3389):
                         findings.append(Finding(
@@ -209,7 +211,56 @@ def scan_security_groups(session) -> list[Finding]:
                                 evidence=f"Protocol: TCP, Port Range: {from_port}-{to_port} (contains {db_name} port {db_port}), Source: {sources_str}",
                                 recommendation="Restrict database port access to authorized application security groups or specific trusted IP ranges."
                             ))
-                            
+
+                # Check 5: SIP Signaling Exposed (port 5060, TCP or UDP)
+                if ip_protocol in ("tcp", "udp") and is_port_in_range(5060):
+                    findings.append(Finding(
+                        service=service_name,
+                        severity="HIGH",
+                        title="SIP Port Exposed to Internet",
+                        resource=resource_name,
+                        evidence=f"Public inbound {ip_protocol.upper()} rule includes port 5060, commonly used by "
+                                 f"SIP signaling. Protocol: {ip_protocol.upper()}, Port Range: {from_port}-{to_port}, "
+                                 f"Source: {sources_str}",
+                        recommendation="Restrict SIP signaling access to expected provider, SBC, proxy, trunk, or "
+                                       "trusted network ranges where architecture allows. Use authenticated/encrypted "
+                                       "signaling and layered controls as appropriate.",
+                        region=region
+                    ))
+
+                # Check 6: SIP-TLS Exposed (port 5061, TCP only)
+                if ip_protocol == "tcp" and is_port_in_range(5061):
+                    findings.append(Finding(
+                        service=service_name,
+                        severity="MEDIUM",
+                        title="SIP-TLS Port Exposed to Internet",
+                        resource=resource_name,
+                        evidence=f"Public inbound TCP rule includes port 5061, commonly used for SIP over TLS. "
+                                 f"Protocol: TCP, Port Range: {from_port}-{to_port}, Source: {sources_str}",
+                        recommendation="Confirm that direct internet exposure is required and restrict access to "
+                                       "expected communications peers/providers where feasible.",
+                        region=region
+                    ))
+
+                # Check 7: Broad UDP Port Range Exposed (potential media/RTP range)
+                if ip_protocol == "udp" and from_port is not None and to_port is not None:
+                    range_width = to_port - from_port + 1
+                    if range_width >= 1000:
+                        findings.append(Finding(
+                            service=service_name,
+                            severity="MEDIUM",
+                            title="Broad UDP Port Range Exposed to Internet",
+                            resource=resource_name,
+                            evidence=f"Public inbound UDP rule exposes port range {from_port}-{to_port} "
+                                     f"({range_width} ports). Broad UDP ranges may be used for real-time "
+                                     f"media/RTP or other UDP-based workloads, depending on application "
+                                     f"configuration. Source: {sources_str}",
+                            recommendation="Confirm the range is required, narrow it where operationally possible, "
+                                           "and restrict sources to trusted communication peers/providers or "
+                                           "network boundaries where architecture allows.",
+                            region=region
+                        ))
+
         except Exception as e:
             # Handle failure on one security group gracefully without stopping the scan
             findings.append(Finding(
