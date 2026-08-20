@@ -214,3 +214,77 @@ def test_cli_output_json_write_failure_is_safe(monkeypatch, capsys, tmp_path):
     assert "Could not write JSON report" in output
     assert "Traceback" not in output
     assert not bad_path.exists()
+
+
+def test_cli_console_prints_risk_score(monkeypatch, capsys):
+    """
+    P. Console output includes the Posture Assessment block with a non-zero
+    risk score when a posture finding exists.
+    """
+    monkeypatch.setattr(
+        main_module, "get_aws_session",
+        lambda profile_name=None, region_name=None: FakeSession()
+    )
+    finding = Finding(
+        service="EC2", severity="HIGH", title="SSH Open To Internet",
+        resource="sg-1", evidence="evidence", recommendation="fix it",
+    )
+    _mock_scanners(monkeypatch, {"scan_ec2": [finding]})
+    monkeypatch.setattr(sys, "argv", ["main.py"])
+
+    main_module.main()
+
+    output = capsys.readouterr().out
+    assert "Posture Assessment:" in output
+    assert "Risk Score:        7/100" in output
+    assert "Risk Level:        LOW" in output
+    assert "Coverage Status:   COMPLETE" in output
+    assert "Coverage Issues:   0" in output
+
+
+def test_cli_zero_findings_console_prints_zero_score_and_complete(monkeypatch, capsys):
+    """
+    Q. Zero findings -> console prints 0/100 risk score, LOW level, COMPLETE coverage.
+    """
+    monkeypatch.setattr(
+        main_module, "get_aws_session",
+        lambda profile_name=None, region_name=None: FakeSession()
+    )
+    _mock_scanners(monkeypatch)
+    monkeypatch.setattr(sys, "argv", ["main.py"])
+
+    main_module.main()
+
+    output = capsys.readouterr().out
+    assert "Posture Assessment:" in output
+    assert "Risk Score:        0/100" in output
+    assert "Risk Level:        LOW" in output
+    assert "Coverage Status:   COMPLETE" in output
+    assert "Coverage Issues:   0" in output
+
+
+def test_cli_degraded_coverage_displayed_correctly(monkeypatch, capsys):
+    """
+    R. A scanner permission/error finding degrades coverage status in console
+    output, and does not inflate the risk score.
+    """
+    monkeypatch.setattr(
+        main_module, "get_aws_session",
+        lambda profile_name=None, region_name=None: FakeSession()
+    )
+    permission_finding = Finding(
+        service="EC2", severity="HIGH",
+        title="Scanner Permission Error: Access Denied for Describe Volumes",
+        resource="EBS Volumes", evidence="Lacks 'ec2:DescribeVolumes' permission. AWS error code: AccessDenied.",
+        recommendation="Grant the required permission.",
+    )
+    _mock_scanners(monkeypatch, {"scan_ec2": [permission_finding]})
+    monkeypatch.setattr(sys, "argv", ["main.py"])
+
+    main_module.main()
+
+    output = capsys.readouterr().out
+    assert "Risk Score:        0/100" in output
+    assert "Risk Level:        LOW" in output
+    assert "Coverage Status:   DEGRADED" in output
+    assert "Coverage Issues:   1" in output

@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from secureops.core.models import Finding
+from secureops.core.scoring import calculate_assessment
 from secureops.core.version import AWS_SECUREOPS_VERSION
 
 SEVERITIES = ("CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO")
@@ -30,6 +31,7 @@ def build_json_report(findings: list[Finding], region: str | None = None) -> dic
             "finding_count": len(findings),
         },
         "summary": summary,
+        "assessment": calculate_assessment(findings),
         "findings": [finding.to_dict() for finding in findings],
     }
 

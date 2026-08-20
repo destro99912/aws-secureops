@@ -27,7 +27,7 @@ def test_report_schema_top_level_keys_and_tool_metadata():
     """
     report = build_json_report([], region="us-east-1")
 
-    assert set(report.keys()) == {"tool", "scan", "summary", "findings"}
+    assert set(report.keys()) == {"tool", "scan", "summary", "assessment", "findings"}
     assert report["tool"] == {"name": "AWS SecureOps", "version": AWS_SECUREOPS_VERSION}
     assert AWS_SECUREOPS_VERSION == "0.2.0"
 
@@ -147,6 +147,51 @@ def test_report_contains_no_sensitive_metadata():
     assert "profile" not in serialized.lower()
     assert "AKIA" not in serialized
     assert "aws_secret_access_key" not in serialized.lower()
+
+
+def test_report_assessment_object_present():
+    """
+    M. The report contains a top-level 'assessment' object.
+    """
+    report = build_json_report([_finding(severity="HIGH")], region="us-east-1")
+
+    assert "assessment" in report
+    assert set(report["assessment"].keys()) == {
+        "risk_score", "risk_level", "raw_risk_points",
+        "posture_finding_count", "coverage_status", "coverage_issue_count",
+    }
+
+
+def test_report_existing_keys_still_present_alongside_assessment():
+    """
+    N. Adding 'assessment' does not remove/rename existing top-level keys.
+    """
+    report = build_json_report([_finding()], region="us-east-1")
+
+    assert "tool" in report
+    assert "scan" in report
+    assert "summary" in report
+    assert "findings" in report
+    assert "assessment" in report
+
+
+def test_report_assessment_score_and_coverage_values_correct():
+    """
+    O. Assessment score/coverage values in the report are correct.
+    """
+    findings = [
+        _finding(severity="HIGH", title="SSH Open To Internet"),
+        _finding(severity="HIGH", title="Scanner Permission Error: Access Denied for Describe Volumes"),
+    ]
+    report = build_json_report(findings, region="us-east-1")
+
+    assessment = report["assessment"]
+    assert assessment["raw_risk_points"] == 7
+    assert assessment["risk_score"] == 7
+    assert assessment["risk_level"] == "LOW"
+    assert assessment["posture_finding_count"] == 1
+    assert assessment["coverage_status"] == "DEGRADED"
+    assert assessment["coverage_issue_count"] == 1
 
 
 def test_write_json_report_produces_valid_indented_json(tmp_path):

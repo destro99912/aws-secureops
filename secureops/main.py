@@ -15,6 +15,7 @@ from secureops.scanners.ec2_scanner import scan_ec2
 
 from secureops.core.models import Finding
 from secureops.core.reporting import build_json_report, write_json_report
+from secureops.core.scoring import calculate_assessment
 
 def print_finding(index, finding: Finding):
     severity_colors = {
@@ -207,6 +208,18 @@ Examples:
         print(f"  INFO:     {counts['INFO']}")
         print(f"  Total:    {len(all_findings)}")
         print("=" * 60)
+
+    # Posture risk score: a simple, deterministic sum of severity weights for
+    # observed posture findings only (capped at 100). It is NOT a compliance
+    # score, certification, or a prediction of breach/exploitability
+    # likelihood. Coverage gaps (permission/scanner errors) are excluded from
+    # the score and reported separately as coverage status/issue count.
+    assessment = calculate_assessment(all_findings)
+    print("\nPosture Assessment:")
+    print(f"  Risk Score:        {assessment['risk_score']}/100")
+    print(f"  Risk Level:        {assessment['risk_level']}")
+    print(f"  Coverage Status:   {assessment['coverage_status']}")
+    print(f"  Coverage Issues:   {assessment['coverage_issue_count']}")
 
     if args.output_json:
         report = build_json_report(all_findings, region=effective_region)
