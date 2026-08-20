@@ -117,4 +117,71 @@ def scan_ec2(session) -> list[Finding]:
                 region=region
             ))
 
+    # EBS volume encryption
+    volumes = []
+    try:
+        paginator = client.get_paginator("describe_volumes")
+        for page in paginator.paginate():
+            volumes.extend(page.get("Volumes", []))
+    except botocore.exceptions.ClientError as e:
+        error_code = e.response.get("Error", {}).get("Code", "")
+        if error_code in ("AccessDenied", "UnauthorizedOperation"):
+            findings.append(create_permission_finding(
+                service=service_name,
+                operation="Describe EBS Volumes",
+                resource="EBS Volumes",
+                required_permission="ec2:DescribeVolumes",
+                error=e,
+                severity="MEDIUM",
+                region=region
+            ))
+        else:
+            findings.append(Finding(
+                service=service_name,
+                severity="MEDIUM",
+                title="Could Not Describe EBS Volumes",
+                resource="EBS Volumes",
+                evidence=sanitize_error(e),
+                recommendation="Ensure the scanner identity has 'ec2:DescribeVolumes' permissions.",
+                region=region
+            ))
+        volumes = []
+    except Exception as e:
+        findings.append(Finding(
+            service=service_name,
+            severity="MEDIUM",
+            title="Could Not Describe EBS Volumes",
+            resource="EBS Volumes",
+            evidence=sanitize_error(e),
+            recommendation="Investigate errors listing EBS volumes.",
+            region=region
+        ))
+        volumes = []
+
+    for volume in volumes:
+        volume_id = volume.get("VolumeId", "Unknown Volume")
+        try:
+            if not volume.get("Encrypted", False):
+                findings.append(Finding(
+                    service=service_name,
+                    severity="HIGH",
+                    title="EBS Volume Is Not Encrypted",
+                    resource=volume_id,
+                    evidence="This EBS volume is not encrypted at rest.",
+                    recommendation="Use encrypted EBS volumes for data at rest. For existing unencrypted "
+                                   "volumes, plan migration to an encrypted replacement following normal AWS "
+                                   "operational procedures.",
+                    region=region
+                ))
+        except Exception as e:
+            findings.append(Finding(
+                service=service_name,
+                severity="LOW",
+                title="Error Scanning EBS Volume",
+                resource=volume_id,
+                evidence=sanitize_error(e),
+                recommendation="Investigate execution errors for this volume.",
+                region=region
+            ))
+
     return findings
