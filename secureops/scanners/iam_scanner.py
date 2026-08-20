@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 import botocore.exceptions
 from secureops.core.models import Finding
-from secureops.core.errors import create_permission_finding
+from secureops.core.errors import create_permission_finding, sanitize_error
 
 def scan_iam(session) -> list[Finding]:
     """
@@ -23,7 +23,7 @@ def scan_iam(session) -> list[Finding]:
             severity="CRITICAL",
             title="Could Not Initialize IAM Client",
             resource="IAM Service",
-            evidence=str(e),
+            evidence=sanitize_error(e),
             recommendation="Verify your AWS session, credentials, and region config."
         ))
         return findings
@@ -59,7 +59,7 @@ def scan_iam(session) -> list[Finding]:
                 severity="MEDIUM",
                 title="Could Not Retrieve Account Summary",
                 resource="Account Summary",
-                evidence=str(e),
+                evidence=sanitize_error(e),
                 recommendation="Ensure the scanner identity has 'iam:GetAccountSummary' permissions."
             ))
     except Exception as e:
@@ -68,7 +68,7 @@ def scan_iam(session) -> list[Finding]:
             severity="MEDIUM",
             title="Could Not Retrieve Account Summary",
             resource="Account Summary",
-            evidence=str(e),
+            evidence=sanitize_error(e),
             recommendation="Ensure the scanner identity has 'iam:GetAccountSummary' permissions."
         ))
 
@@ -95,7 +95,7 @@ def scan_iam(session) -> list[Finding]:
                 severity="HIGH",
                 title="Could Not List IAM Users",
                 resource="IAM Users List",
-                evidence=str(e),
+                evidence=sanitize_error(e),
                 recommendation="Ensure the scanner identity has 'iam:ListUsers' permissions."
             ))
         return findings
@@ -105,7 +105,7 @@ def scan_iam(session) -> list[Finding]:
             severity="HIGH",
             title="Could Not List IAM Users",
             resource="IAM Users List",
-            evidence=str(e),
+            evidence=sanitize_error(e),
             recommendation="Ensure the scanner identity has 'iam:ListUsers' permissions."
         ))
         return findings
@@ -157,7 +157,7 @@ def scan_iam(session) -> list[Finding]:
                     severity="LOW",
                     title="Could Not List MFA Devices for User",
                     resource=f"User: {username}",
-                    evidence=str(e),
+                    evidence=sanitize_error(e),
                     recommendation="Ensure the scanner identity has 'iam:ListMFADevices' and 'iam:GetLoginProfile' permissions."
                 ))
         except Exception as e:
@@ -166,7 +166,7 @@ def scan_iam(session) -> list[Finding]:
                 severity="LOW",
                 title="Could Not List MFA Devices for User",
                 resource=f"User: {username}",
-                evidence=str(e),
+                evidence=sanitize_error(e),
                 recommendation="Ensure the scanner identity has 'iam:ListMFADevices' and 'iam:GetLoginProfile' permissions."
             ))
 
@@ -174,19 +174,19 @@ def scan_iam(session) -> list[Finding]:
         try:
             keys = client.list_access_keys(UserName=username)
             metadata = keys.get('AccessKeyMetadata', [])
-            if metadata:
+            active_keys = [k for k in metadata if k.get('Status') == 'Active']
+            if active_keys:
                 findings.append(Finding(
                     service="IAM",
                     severity="LOW",
                     title="Active Access Keys Found",
                     resource=f"User: {username}",
-                    evidence=f"User has {len(metadata)} active access key(s).",
+                    evidence=f"User has {len(active_keys)} active access key(s).",
                     recommendation="Verify if programmatic access is necessary for this user. Deactivate/delete if unused."
                 ))
-                
-                # Check age for each key
-                for key in metadata:
-                    key_id = key['AccessKeyId']
+
+                # Check age for each active key
+                for key in active_keys:
                     create_date = key['CreateDate']
                     age_days = (datetime.now(timezone.utc) - create_date).days
                     if age_days > 90:
@@ -194,7 +194,7 @@ def scan_iam(session) -> list[Finding]:
                             service="IAM",
                             severity="HIGH",
                             title="Access Key Older Than 90 Days",
-                            resource=f"User: {username} (Key ID: {key_id})",
+                            resource=f"User: {username}",
                             evidence=f"Access key age is {age_days} days (Created: {create_date.strftime('%Y-%m-%d')}).",
                             recommendation="Rotate programmatic access keys every 90 days."
                         ))
@@ -215,7 +215,7 @@ def scan_iam(session) -> list[Finding]:
                     severity="LOW",
                     title="Could Not List Access Keys for User",
                     resource=f"User: {username}",
-                    evidence=str(e),
+                    evidence=sanitize_error(e),
                     recommendation="Ensure the scanner identity has 'iam:ListAccessKeys' permissions."
                 ))
         except Exception as e:
@@ -224,7 +224,7 @@ def scan_iam(session) -> list[Finding]:
                 severity="LOW",
                 title="Could Not List Access Keys for User",
                 resource=f"User: {username}",
-                evidence=str(e),
+                evidence=sanitize_error(e),
                 recommendation="Ensure the scanner identity has 'iam:ListAccessKeys' permissions."
             ))
 
@@ -259,7 +259,7 @@ def scan_iam(session) -> list[Finding]:
                     severity="LOW",
                     title="Could Not List Attached Policies for User",
                     resource=f"User: {username}",
-                    evidence=str(e),
+                    evidence=sanitize_error(e),
                     recommendation="Ensure the scanner identity has 'iam:ListAttachedUserPolicies' permissions."
                 ))
         except Exception as e:
@@ -268,7 +268,7 @@ def scan_iam(session) -> list[Finding]:
                 severity="LOW",
                 title="Could Not List Attached Policies for User",
                 resource=f"User: {username}",
-                evidence=str(e),
+                evidence=sanitize_error(e),
                 recommendation="Ensure the scanner identity has 'iam:ListAttachedUserPolicies' permissions."
             ))
 

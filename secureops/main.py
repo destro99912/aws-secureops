@@ -74,10 +74,7 @@ Examples:
         sts_client = session.client("sts")
         identity = sts_client.get_caller_identity()
         
-        print("\n[+] Successfully connected to AWS!")
-        print(f"    Account:  {identity.get('Account')}")
-        print(f"    Arn:      {identity.get('Arn')}")
-        print(f"    UserId:   {identity.get('UserId')}")
+        print("\n[+] Successfully authenticated to AWS.")
         
     except botocore.exceptions.ProfileNotFound:
         profile_str = profile if profile else os.environ.get("AWS_PROFILE", "default")
@@ -126,8 +123,8 @@ Examples:
             print("    The request signature is invalid. Your Secret Access Key may be incorrect.")
             print("    Please verify your secret key configuration.")
         else:
-            print(f"    {e.response.get('Error', {}).get('Message', str(e))}")
-            print("    Please check your account permissions and credentials.")
+            print("    AWS returned an error while validating the current credentials or session.")
+            print("    Verify credentials, permissions, region, and AWS service availability.")
         sys.exit(1)
         
     except Exception as e:

@@ -190,11 +190,71 @@ def test_iam_scanner_positive_findings():
     # Verify Active Keys
     active_key_f = next(f for f in findings if f.title == "Active Access Keys Found")
     assert active_key_f.severity == "LOW"
-    
+    assert "AKIAIOSFODNN7EXAMPLE" not in active_key_f.resource
+    assert "AKIAIOSFODNN7EXAMPLE" not in active_key_f.evidence
+
     # Verify Old Key
     old_key_f = next(f for f in findings if f.title == "Access Key Older Than 90 Days")
     assert old_key_f.severity == "HIGH"
-    
+    assert "AKIAIOSFODNN7EXAMPLE" not in old_key_f.resource
+    assert "AKIAIOSFODNN7EXAMPLE" not in old_key_f.evidence
+
     # Verify Direct Admin policy
     admin_policy_f = next(f for f in findings if f.title == "Directly Attached AdministratorAccess Policy")
     assert admin_policy_f.severity == "HIGH"
+
+
+def test_iam_scanner_inactive_old_key_not_flagged():
+    """
+    An inactive access key, even if older than 90 days, must not produce
+    'Active Access Keys Found' or 'Access Key Older Than 90 Days' findings.
+    """
+    session = boto3.Session(region_name="us-east-1")
+    client = session.client("iam")
+    stubber = Stubber(client)
+
+    stubber.add_response(
+        "get_account_summary",
+        {"SummaryMap": {"AccountMFAEnabled": 1}}
+    )
+
+    stubber.add_response(
+        "list_users",
+        {"Users": [{"UserName": "inactive-key-user", "UserId": "AIDAQRSTUVWXYZEXAMPLE", "Path": "/", "Arn": "arn:aws:iam::123:user/inactive-key-user", "CreateDate": datetime.now()}]}
+    )
+
+    stubber.add_client_error(
+        "get_login_profile",
+        service_error_code="NoSuchEntity",
+        service_message="No Login Profile"
+    )
+
+    old_date = datetime.now(timezone.utc) - timedelta(days=200)
+    stubber.add_response(
+        "list_access_keys",
+        {
+            "AccessKeyMetadata": [
+                {
+                    "UserName": "inactive-key-user",
+                    "AccessKeyId": "AKIAINACTIVEEXAMPLE1",
+                    "Status": "Inactive",
+                    "CreateDate": old_date
+                }
+            ]
+        }
+    )
+
+    stubber.add_response(
+        "list_attached_user_policies",
+        {"AttachedPolicies": []}
+    )
+
+    stubber.activate()
+    session.client = lambda name, *args, **kwargs: client  # type: ignore[assignment]
+
+    findings = scan_iam(session)
+    stubber.assert_no_pending_responses()
+
+    titles = [f.title for f in findings]
+    assert "Active Access Keys Found" not in titles
+    assert "Access Key Older Than 90 Days" not in titles

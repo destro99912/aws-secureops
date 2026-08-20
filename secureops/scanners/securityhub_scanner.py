@@ -1,6 +1,6 @@
 import botocore.exceptions
 from secureops.core.models import Finding
-from secureops.core.errors import create_permission_finding
+from secureops.core.errors import create_permission_finding, sanitize_error
 
 def scan_securityhub(session) -> list[Finding]:
     """
@@ -22,7 +22,7 @@ def scan_securityhub(session) -> list[Finding]:
             severity="CRITICAL",
             title="Could Not Initialize Security Hub Client",
             resource="Security Hub Service",
-            evidence=str(e),
+            evidence=sanitize_error(e),
             recommendation="Verify your AWS session, credentials, and region config."
         ))
         return findings
@@ -60,7 +60,7 @@ def scan_securityhub(session) -> list[Finding]:
                 severity="MEDIUM",
                 title="Could Not Describe Security Hub Status",
                 resource="Security Hub Config",
-                evidence=str(e),
+                evidence=sanitize_error(e),
                 recommendation="Investigate Security Hub service configuration and permissions."
             ))
             return findings
@@ -70,7 +70,7 @@ def scan_securityhub(session) -> list[Finding]:
             severity="MEDIUM",
             title="Could Not Describe Security Hub Status",
             resource="Security Hub Config",
-            evidence=str(e),
+            evidence=sanitize_error(e),
             recommendation="Investigate errors accessing Security Hub."
         ))
         return findings
@@ -105,7 +105,7 @@ def scan_securityhub(session) -> list[Finding]:
                 severity="MEDIUM",
                 title="Could Not Retrieve Security Hub Findings",
                 resource="Security Hub Findings",
-                evidence=str(e),
+                evidence=sanitize_error(e),
                 recommendation="Ensure the scanner identity has correct Security Hub permissions."
             ))
         return findings
@@ -115,7 +115,7 @@ def scan_securityhub(session) -> list[Finding]:
             severity="MEDIUM",
             title="Could Not Retrieve Security Hub Findings",
             resource="Security Hub Findings",
-            evidence=str(e),
+            evidence=sanitize_error(e),
             recommendation="Investigate errors retrieving Security Hub findings."
         ))
         return findings

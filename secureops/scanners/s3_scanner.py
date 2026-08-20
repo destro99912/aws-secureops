@@ -1,6 +1,6 @@
 import botocore.exceptions
 from secureops.core.models import Finding
-from secureops.core.errors import create_permission_finding
+from secureops.core.errors import create_permission_finding, sanitize_error
 
 def scan_s3(session) -> list[Finding]:
     """
@@ -22,7 +22,7 @@ def scan_s3(session) -> list[Finding]:
             severity="CRITICAL",
             title="Could Not Initialize S3 Client",
             resource="S3 Service",
-            evidence=str(e),
+            evidence=sanitize_error(e),
             recommendation="Verify your AWS session, credentials, and region config."
         ))
         return findings
@@ -48,7 +48,7 @@ def scan_s3(session) -> list[Finding]:
                 severity="HIGH",
                 title="Could Not List S3 Buckets",
                 resource="S3 Service",
-                evidence=str(e),
+                evidence=sanitize_error(e),
                 recommendation="Ensure the scanner identity has 's3:ListAllMyBuckets' permissions."
             ))
         return findings
@@ -58,7 +58,7 @@ def scan_s3(session) -> list[Finding]:
             severity="HIGH",
             title="Could Not List S3 Buckets",
             resource="S3 Service",
-            evidence=str(e),
+            evidence=sanitize_error(e),
             recommendation="Ensure the scanner identity has 's3:ListAllMyBuckets' permissions."
         ))
         return findings
@@ -112,7 +112,7 @@ def scan_s3(session) -> list[Finding]:
                     severity="LOW",
                     title="Could Not Retrieve Public Access Block Configuration",
                     resource=bucket_name,
-                    evidence=str(e),
+                    evidence=sanitize_error(e),
                     recommendation="Ensure the scanner identity has 's3:GetBucketPublicAccessBlock' permissions."
                 ))
         except Exception as e:
@@ -121,7 +121,7 @@ def scan_s3(session) -> list[Finding]:
                 severity="LOW",
                 title="Could Not Retrieve Public Access Block Configuration",
                 resource=bucket_name,
-                evidence=str(e),
+                evidence=sanitize_error(e),
                 recommendation="Verify S3 bucket connectivity and access permissions."
             ))
 
@@ -154,7 +154,7 @@ def scan_s3(session) -> list[Finding]:
                     severity="LOW",
                     title="Could Not Retrieve Default Encryption Configuration",
                     resource=bucket_name,
-                    evidence=str(e),
+                    evidence=sanitize_error(e),
                     recommendation="Ensure the scanner identity has 's3:GetEncryptionConfiguration' permissions."
                 ))
         except Exception as e:
@@ -163,7 +163,7 @@ def scan_s3(session) -> list[Finding]:
                 severity="LOW",
                 title="Could Not Retrieve Default Encryption Configuration",
                 resource=bucket_name,
-                evidence=str(e),
+                evidence=sanitize_error(e),
                 recommendation="Verify S3 bucket connectivity and access permissions."
             ))
 
@@ -197,7 +197,7 @@ def scan_s3(session) -> list[Finding]:
                     severity="LOW",
                     title="Could Not Retrieve Bucket Versioning Status",
                     resource=bucket_name,
-                    evidence=str(e),
+                    evidence=sanitize_error(e),
                     recommendation="Ensure the scanner identity has 's3:GetBucketVersioning' permissions."
                 ))
         except Exception as e:
@@ -206,7 +206,7 @@ def scan_s3(session) -> list[Finding]:
                 severity="LOW",
                 title="Could Not Retrieve Bucket Versioning Status",
                 resource=bucket_name,
-                evidence=str(e),
+                evidence=sanitize_error(e),
                 recommendation="Ensure the scanner identity has 's3:GetBucketVersioning' permissions."
             ))
 
@@ -242,7 +242,7 @@ def scan_s3(session) -> list[Finding]:
                         severity="LOW",
                         title="Could Not Retrieve Bucket Policy Status",
                         resource=bucket_name,
-                        evidence=str(e),
+                        evidence=sanitize_error(e),
                         recommendation="Ensure the scanner identity has 's3:GetBucketPolicyStatus' permissions."
                     ))
         except Exception as e:
@@ -251,7 +251,7 @@ def scan_s3(session) -> list[Finding]:
                 severity="LOW",
                 title="Could Not Retrieve Bucket Policy Status",
                 resource=bucket_name,
-                evidence=str(e),
+                evidence=sanitize_error(e),
                 recommendation="Verify S3 bucket connectivity and access permissions."
             ))
 

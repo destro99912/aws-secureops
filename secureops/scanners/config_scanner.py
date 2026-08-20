@@ -1,6 +1,6 @@
 import botocore.exceptions
 from secureops.core.models import Finding
-from secureops.core.errors import create_permission_finding
+from secureops.core.errors import create_permission_finding, sanitize_error
 
 def scan_config(session) -> list[Finding]:
     """
@@ -22,7 +22,7 @@ def scan_config(session) -> list[Finding]:
             severity="CRITICAL",
             title="Could Not Initialize AWS Config Client",
             resource="AWS Config Service",
-            evidence=str(e),
+            evidence=sanitize_error(e),
             recommendation="Verify your AWS session, credentials, and region config."
         ))
         return findings
@@ -61,7 +61,7 @@ def scan_config(session) -> list[Finding]:
                 severity="MEDIUM",
                 title="Could Not Describe Configuration Recorders",
                 resource="AWS Config Service",
-                evidence=str(e),
+                evidence=sanitize_error(e),
                 recommendation="Investigate errors accessing AWS Config configuration recorders."
             ))
     except Exception as e:
@@ -70,7 +70,7 @@ def scan_config(session) -> list[Finding]:
             severity="MEDIUM",
             title="Could Not Describe Configuration Recorders",
             resource="AWS Config Service",
-            evidence=str(e),
+            evidence=sanitize_error(e),
             recommendation="Investigate errors accessing AWS Config configuration recorders."
         ))
 
@@ -140,7 +140,7 @@ def scan_config(session) -> list[Finding]:
                         severity="MEDIUM",
                         title="Could Not Retrieve Configuration Recorder Status",
                         resource=recorder_name,
-                        evidence=str(e),
+                        evidence=sanitize_error(e),
                         recommendation="Ensure the scanner identity has permissions to get recorder status."
                     ))
             except Exception as e:
@@ -149,7 +149,7 @@ def scan_config(session) -> list[Finding]:
                     severity="MEDIUM",
                     title="Could Not Retrieve Configuration Recorder Status",
                     resource=recorder_name,
-                    evidence=str(e),
+                    evidence=sanitize_error(e),
                     recommendation="Investigate errors checking configuration recorder status."
                 ))
 
@@ -186,7 +186,7 @@ def scan_config(session) -> list[Finding]:
                 severity="MEDIUM",
                 title="Could Not Describe Delivery Channels",
                 resource="AWS Config Delivery Channels",
-                evidence=str(e),
+                evidence=sanitize_error(e),
                 recommendation="Investigate errors accessing AWS Config delivery channels."
             ))
     except Exception as e:
@@ -195,7 +195,7 @@ def scan_config(session) -> list[Finding]:
             severity="MEDIUM",
             title="Could Not Describe Delivery Channels",
             resource="AWS Config Delivery Channels",
-            evidence=str(e),
+            evidence=sanitize_error(e),
             recommendation="Investigate errors accessing AWS Config delivery channels."
         ))
 

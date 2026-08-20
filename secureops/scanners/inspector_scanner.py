@@ -1,6 +1,6 @@
 import botocore.exceptions
 from secureops.core.models import Finding
-from secureops.core.errors import create_permission_finding
+from secureops.core.errors import create_permission_finding, sanitize_error
 
 def scan_inspector(session) -> list[Finding]:
     """
@@ -22,7 +22,7 @@ def scan_inspector(session) -> list[Finding]:
             severity="CRITICAL",
             title="Could Not Initialize Inspector Client",
             resource="Amazon Inspector Service",
-            evidence=str(e),
+            evidence=sanitize_error(e),
             recommendation="Verify your AWS session, credentials, and region config."
         ))
         return findings
@@ -80,7 +80,7 @@ def scan_inspector(session) -> list[Finding]:
                 severity="MEDIUM",
                 title="Could Not Retrieve Inspector Status",
                 resource="Amazon Inspector Config",
-                evidence=str(e),
+                evidence=sanitize_error(e),
                 recommendation="Investigate Amazon Inspector configuration and permissions."
             ))
             return findings
@@ -90,7 +90,7 @@ def scan_inspector(session) -> list[Finding]:
             severity="MEDIUM",
             title="Could Not Retrieve Inspector Status",
             resource="Amazon Inspector Config",
-            evidence=str(e),
+            evidence=sanitize_error(e),
             recommendation="Investigate errors accessing Amazon Inspector."
         ))
         return findings
@@ -138,7 +138,7 @@ def scan_inspector(session) -> list[Finding]:
                 severity="MEDIUM",
                 title="Could Not Retrieve Inspector Findings",
                 resource="Amazon Inspector Findings",
-                evidence=str(e),
+                evidence=sanitize_error(e),
                 recommendation="Ensure the scanner identity has correct Amazon Inspector permissions."
             ))
         return findings
@@ -148,7 +148,7 @@ def scan_inspector(session) -> list[Finding]:
             severity="MEDIUM",
             title="Could Not Retrieve Inspector Findings",
             resource="Amazon Inspector Findings",
-            evidence=str(e),
+            evidence=sanitize_error(e),
             recommendation="Investigate errors retrieving Amazon Inspector findings."
         ))
         return findings

@@ -1,6 +1,6 @@
 import botocore.exceptions
 from secureops.core.models import Finding
-from secureops.core.errors import create_permission_finding
+from secureops.core.errors import create_permission_finding, sanitize_error
 
 def scan_security_groups(session) -> list[Finding]:
     """
@@ -23,7 +23,7 @@ def scan_security_groups(session) -> list[Finding]:
             severity="CRITICAL",
             title="Could Not Initialize EC2 Client",
             resource="EC2 Service",
-            evidence=str(e),
+            evidence=sanitize_error(e),
             recommendation="Verify your AWS session, credentials, and region config."
         ))
         return findings
@@ -56,7 +56,7 @@ def scan_security_groups(session) -> list[Finding]:
                 severity="MEDIUM",
                 title="Could Not Describe Network Interfaces",
                 resource="Network Interfaces",
-                evidence=str(e),
+                evidence=sanitize_error(e),
                 recommendation="Ensure correct EC2 permissions to check for network interfaces."
             ))
     except Exception as e:
@@ -66,7 +66,7 @@ def scan_security_groups(session) -> list[Finding]:
             severity="MEDIUM",
             title="Could Not Describe Network Interfaces",
             resource="Network Interfaces",
-            evidence=str(e),
+            evidence=sanitize_error(e),
             recommendation="Investigate errors describing Network Interfaces."
         ))
 
@@ -93,7 +93,7 @@ def scan_security_groups(session) -> list[Finding]:
                 severity="MEDIUM",
                 title="Could Not Describe Security Groups",
                 resource="Security Groups",
-                evidence=str(e),
+                evidence=sanitize_error(e),
                 recommendation="Ensure correct EC2 permissions."
             ))
         return findings
@@ -103,7 +103,7 @@ def scan_security_groups(session) -> list[Finding]:
             severity="MEDIUM",
             title="Could Not Describe Security Groups",
             resource="Security Groups",
-            evidence=str(e),
+            evidence=sanitize_error(e),
             recommendation="Investigate errors listing security groups."
         ))
         return findings
@@ -217,7 +217,7 @@ def scan_security_groups(session) -> list[Finding]:
                 severity="LOW",
                 title="Error Scanning Security Group",
                 resource=sg.get("GroupId", "Unknown SG"),
-                evidence=str(e),
+                evidence=sanitize_error(e),
                 recommendation="Investigate execution errors for this security group."
             ))
             
