@@ -1,6 +1,6 @@
 import botocore.exceptions
-from core.models import Finding
-from core.errors import create_permission_finding
+from secureops.core.models import Finding
+from secureops.core.errors import create_permission_finding, sanitize_error
 
 def scan_guardduty(session) -> list[Finding]:
     """
@@ -22,7 +22,7 @@ def scan_guardduty(session) -> list[Finding]:
             severity="CRITICAL",
             title="Could Not Initialize GuardDuty Client",
             resource="GuardDuty Service",
-            evidence=str(e),
+            evidence=sanitize_error(e),
             recommendation="Verify your AWS session, credentials, and region config."
         ))
         return findings
@@ -69,7 +69,7 @@ def scan_guardduty(session) -> list[Finding]:
             severity="MEDIUM",
             title="Could Not List GuardDuty Detectors",
             resource="GuardDuty Detectors",
-            evidence=str(e),
+            evidence=sanitize_error(e),
             recommendation="Investigate errors listing GuardDuty detectors."
         ))
         return findings
@@ -128,7 +128,7 @@ def scan_guardduty(session) -> list[Finding]:
                 severity="MEDIUM",
                 title="Could Not List GuardDuty Findings",
                 resource=f"Detector: {detector_id}",
-                evidence=str(e),
+                evidence=sanitize_error(e),
                 recommendation="Investigate errors listing findings for this detector."
             ))
             continue
@@ -171,7 +171,7 @@ def scan_guardduty(session) -> list[Finding]:
                 severity="MEDIUM",
                 title="Could Not Retrieve GuardDuty Findings Details",
                 resource=f"Detector: {detector_id}",
-                evidence=str(e),
+                evidence=sanitize_error(e),
                 recommendation="Investigate errors retrieving details for GuardDuty findings."
             ))
             continue

@@ -13,13 +13,24 @@ Thank you for your interest in contributing to AWS SecureOps! We welcome communi
 ```text
 secureops/
 ├── core/
-│   └── aws_session.py        # AWS session initialization helper
+│   ├── aws_session.py    # AWS session initialization helper
+│   ├── models.py         # Finding dataclass
+│   ├── errors.py         # create_permission_finding() / sanitize_error()
+│   ├── scoring.py        # Posture risk score + assessment coverage
+│   ├── reporting.py      # JSON report build/write
+│   └── version.py        # AWS_SECUREOPS_VERSION constant
 ├── scanners/
-│   ├── iam_scanner.py        # IAM security checks
-│   ├── s3_scanner.py        # S3 security checks
-│   ├── ...
-│   └── securitygroup_scanner.py # Security Groups checks
-└── main.py                   # Main orchestrator / CLI entry point
+│   ├── iam_scanner.py             # IAM security checks
+│   ├── s3_scanner.py              # S3 security checks
+│   ├── cloudtrail_scanner.py
+│   ├── config_scanner.py
+│   ├── guardduty_scanner.py
+│   ├── securityhub_scanner.py
+│   ├── inspector_scanner.py
+│   ├── kms_scanner.py
+│   ├── securitygroup_scanner.py   # Security Groups + communications-aware exposure checks
+│   └── ec2_scanner.py             # EC2 instance public-IP/IMDSv2 + EBS encryption checks
+└── main.py                # Main orchestrator / CLI entry point
 ```
 
 ## Coding Style
@@ -35,22 +46,23 @@ When creating or updating a scanner, follow these rules:
 
 1. **Naming Conventions**: Name scanner files in snake_case ending with `_scanner.py` (e.g. `kms_scanner.py`).
 2. **Main Function**: Define a single entry point named `scan_<service>(session) -> list[Finding]` that takes a `boto3.Session` object.
-3. **Finding Object Usage**: Every issue must return a typed `Finding` dataclass object. Import it from `core.models`:
+3. **Finding Object Usage**: Every issue must return a typed `Finding` dataclass object. Import it from `secureops.core.models`:
    ```python
-   from core.models import Finding
-   
+   from secureops.core.models import Finding
+
    Finding(
        service="KMS",
        severity="HIGH",
        title="KMS Key Disabled",
-       resource="arn:aws:kms:...",
+       resource="key-id-or-name",
        evidence="KMS key is currently disabled.",
        recommendation="Review whether the key should remain disabled or be re-enabled if actively required."
    )
    ```
-4. **Handling Permission Errors**: If a read API call fails due to permission errors (e.g. `AccessDenied`), do not let the scanner crash. Standardize permission findings using the `create_permission_finding` helper from `core.errors`:
+   Do not put account IDs, ARNs, credentials, access-key IDs, public IP addresses, or raw AWS exception text into `resource`/`evidence` — keep findings sanitized.
+4. **Handling Permission Errors**: If a read API call fails due to permission errors (e.g. `AccessDenied`), do not let the scanner crash. Standardize permission findings using the `create_permission_finding` helper from `secureops.core.errors` (and use `sanitize_error()` for any other error path instead of `str(e)`):
    ```python
-   from core.errors import create_permission_finding
+   from secureops.core.errors import create_permission_finding, sanitize_error
    # Inside except botocore.exceptions.ClientError block
    create_permission_finding(
        service="KMS",

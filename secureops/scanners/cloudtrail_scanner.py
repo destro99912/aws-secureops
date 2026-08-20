@@ -1,6 +1,6 @@
 import botocore.exceptions
-from core.models import Finding
-from core.errors import create_permission_finding
+from secureops.core.models import Finding
+from secureops.core.errors import create_permission_finding, sanitize_error
 
 def scan_cloudtrail(session) -> list[Finding]:
     """
@@ -22,7 +22,7 @@ def scan_cloudtrail(session) -> list[Finding]:
             severity="CRITICAL",
             title="Could Not Initialize CloudTrail Client",
             resource="CloudTrail Service",
-            evidence=str(e),
+            evidence=sanitize_error(e),
             recommendation="Verify your AWS session, credentials, and region config."
         ))
         return findings
@@ -48,7 +48,7 @@ def scan_cloudtrail(session) -> list[Finding]:
                 severity="HIGH",
                 title="Could Not Describe CloudTrails",
                 resource="CloudTrail Service",
-                evidence=str(e),
+                evidence=sanitize_error(e),
                 recommendation="Ensure the scanner identity has 'cloudtrail:DescribeTrails' permissions."
             ))
         return findings
@@ -58,7 +58,7 @@ def scan_cloudtrail(session) -> list[Finding]:
             severity="HIGH",
             title="Could Not Describe CloudTrails",
             resource="CloudTrail Service",
-            evidence=str(e),
+            evidence=sanitize_error(e),
             recommendation="Ensure the scanner identity has 'cloudtrail:DescribeTrails' permissions."
         ))
         return findings
@@ -109,7 +109,7 @@ def scan_cloudtrail(session) -> list[Finding]:
                     severity="LOW",
                     title="Could Not Retrieve CloudTrail Status",
                     resource=trail_name,
-                    evidence=str(e),
+                    evidence=sanitize_error(e),
                     recommendation="Ensure the scanner identity has 'cloudtrail:GetTrailStatus' permissions."
                 ))
         except Exception as e:
@@ -118,7 +118,7 @@ def scan_cloudtrail(session) -> list[Finding]:
                 severity="LOW",
                 title="Could Not Retrieve CloudTrail Status",
                 resource=trail_name,
-                evidence=str(e),
+                evidence=sanitize_error(e),
                 recommendation="Ensure the scanner identity has 'cloudtrail:GetTrailStatus' permissions."
             ))
 

@@ -1,11 +1,29 @@
 import botocore.exceptions
-from core.models import Finding
+from secureops.core.models import Finding
 
 ACCESS_DENIED_CODES = {
     "AccessDenied",
     "AccessDeniedException",
     "UnauthorizedOperation",
 }
+
+def _get_error_code(error: Exception) -> str:
+    if isinstance(error, botocore.exceptions.ClientError):
+        return error.response.get("Error", {}).get("Code", "") or "UnknownError"
+    return "UnknownError"
+
+
+def sanitize_error(error: Exception) -> str:
+    """
+    Produces a safe, user-facing evidence string for an exception.
+    Never includes raw SDK exception text, request IDs, HTTP metadata,
+    account IDs, or ARNs.
+    """
+    error_code = _get_error_code(error)
+    if error_code != "UnknownError":
+        return f"AWS error occurred. AWS error code: {error_code}."
+    return "An unexpected error occurred while contacting AWS."
+
 
 def create_permission_finding(
     *,
@@ -22,17 +40,15 @@ def create_permission_finding(
     Only standardizes confirmed permission-denial codes. Otherwise, returns a generic
     scanner execution error finding.
     """
-    error_code = "UnknownError"
-    if isinstance(error, botocore.exceptions.ClientError):
-        error_code = error.response.get("Error", {}).get("Code", "")
+    error_code = _get_error_code(error)
 
     if error_code in ACCESS_DENIED_CODES:
         title = f"Scanner Permission Error: Access Denied for {operation}"
-        evidence = f"Lacks '{required_permission}' permission. Code: {error_code}. Details: {str(error)}"
+        evidence = f"Lacks '{required_permission}' permission. AWS error code: {error_code}."
         recommendation = f"Ensure the scanner IAM identity is granted the '{required_permission}' permission."
     else:
         title = f"Scanner Execution Error: Unable to perform {operation}"
-        evidence = f"Unexpected error during {operation}. Code: {error_code}. Details: {str(error)}"
+        evidence = f"Unexpected error during {operation}. AWS error code: {error_code}."
         recommendation = f"Verify credentials, network connectivity, and service availability for '{service}'."
 
     return Finding(

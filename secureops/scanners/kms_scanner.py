@@ -1,6 +1,6 @@
 import botocore.exceptions
-from core.models import Finding
-from core.errors import create_permission_finding
+from secureops.core.models import Finding
+from secureops.core.errors import create_permission_finding, sanitize_error
 
 def scan_kms(session) -> list[Finding]:
     """
@@ -22,7 +22,7 @@ def scan_kms(session) -> list[Finding]:
             severity="CRITICAL",
             title="Could Not Initialize KMS Client",
             resource="KMS Service",
-            evidence=str(e),
+            evidence=sanitize_error(e),
             recommendation="Verify your AWS session, credentials, and region config."
         ))
         return findings
@@ -50,7 +50,7 @@ def scan_kms(session) -> list[Finding]:
                 severity="MEDIUM",
                 title="Could Not List KMS Keys",
                 resource="KMS Keys",
-                evidence=str(e),
+                evidence=sanitize_error(e),
                 recommendation="Ensure the scanner identity has correct KMS permissions."
             ))
         return findings
@@ -60,7 +60,7 @@ def scan_kms(session) -> list[Finding]:
             severity="MEDIUM",
             title="Could Not List KMS Keys",
             resource="KMS Keys",
-            evidence=str(e),
+            evidence=sanitize_error(e),
             recommendation="Investigate errors listing KMS keys."
         ))
         return findings
@@ -91,7 +91,7 @@ def scan_kms(session) -> list[Finding]:
                     severity="LOW",
                     title="Could Not Describe KMS Key",
                     resource=key_arn,
-                    evidence=str(e),
+                    evidence=sanitize_error(e),
                     recommendation="Check permissions and key status."
                 ))
             continue
@@ -101,7 +101,7 @@ def scan_kms(session) -> list[Finding]:
                 severity="LOW",
                 title="Could Not Describe KMS Key",
                 resource=key_arn,
-                evidence=str(e),
+                evidence=sanitize_error(e),
                 recommendation="Investigate error describing key."
             ))
             continue
@@ -169,7 +169,7 @@ def scan_kms(session) -> list[Finding]:
                             severity="LOW",
                             title="Could Not Get Key Rotation Status",
                             resource=key_arn,
-                            evidence=str(e),
+                            evidence=sanitize_error(e),
                             recommendation="Verify kms:GetKeyRotationStatus permissions and key type support."
                         ))
             except Exception as e:

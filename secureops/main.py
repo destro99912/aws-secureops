@@ -1,18 +1,21 @@
 import sys
 import botocore.exceptions
-from core.aws_session import get_aws_session
-from scanners.iam_scanner import scan_iam
-from scanners.s3_scanner import scan_s3
-from scanners.cloudtrail_scanner import scan_cloudtrail
-from scanners.config_scanner import scan_config
-from scanners.guardduty_scanner import scan_guardduty
-from scanners.securityhub_scanner import scan_securityhub
-from scanners.inspector_scanner import scan_inspector
-from scanners.kms_scanner import scan_kms
-from scanners.securitygroup_scanner import scan_security_groups
+from secureops.core.aws_session import get_aws_session
+from secureops.scanners.iam_scanner import scan_iam
+from secureops.scanners.s3_scanner import scan_s3
+from secureops.scanners.cloudtrail_scanner import scan_cloudtrail
+from secureops.scanners.config_scanner import scan_config
+from secureops.scanners.guardduty_scanner import scan_guardduty
+from secureops.scanners.securityhub_scanner import scan_securityhub
+from secureops.scanners.inspector_scanner import scan_inspector
+from secureops.scanners.kms_scanner import scan_kms
+from secureops.scanners.securitygroup_scanner import scan_security_groups
+from secureops.scanners.ec2_scanner import scan_ec2
 
 
-from core.models import Finding
+from secureops.core.models import Finding
+from secureops.core.reporting import build_json_report, write_json_report
+from secureops.core.scoring import calculate_assessment
 
 def print_finding(index, finding: Finding):
     severity_colors = {
@@ -42,10 +45,11 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python secureops/main.py
-  python secureops/main.py --profile secureops
-  python secureops/main.py --region us-east-1
-  python secureops/main.py --profile secureops --region us-east-1
+  python -m secureops.main
+  python -m secureops.main --profile secureops
+  python -m secureops.main --region us-east-1
+  python -m secureops.main --profile secureops --region us-east-1
+  python -m secureops.main --output-json report.json
 """
     )
     parser.add_argument(
@@ -56,7 +60,12 @@ Examples:
         "--region",
         help="AWS region to scan."
     )
-    
+    parser.add_argument(
+        "--output-json",
+        metavar="PATH",
+        help="Write a JSON report to this local file path after scanning."
+    )
+
     args = parser.parse_args()
     
     print("=" * 60)
@@ -66,18 +75,18 @@ Examples:
     profile = args.profile
     region = args.region
     
+    effective_region = None
+
     try:
         # Initialize AWS session
         session = get_aws_session(profile_name=profile, region_name=region)
-        
+        effective_region = getattr(session, "region_name", None)
+
         # Initialize the STS client to verify identity
         sts_client = session.client("sts")
         identity = sts_client.get_caller_identity()
-        
-        print("\n[+] Successfully connected to AWS!")
-        print(f"    Account:  {identity.get('Account')}")
-        print(f"    Arn:      {identity.get('Arn')}")
-        print(f"    UserId:   {identity.get('UserId')}")
+
+        print("\n[+] Successfully authenticated to AWS.")
         
     except botocore.exceptions.ProfileNotFound:
         profile_str = profile if profile else os.environ.get("AWS_PROFILE", "default")
@@ -126,8 +135,8 @@ Examples:
             print("    The request signature is invalid. Your Secret Access Key may be incorrect.")
             print("    Please verify your secret key configuration.")
         else:
-            print(f"    {e.response.get('Error', {}).get('Message', str(e))}")
-            print("    Please check your account permissions and credentials.")
+            print("    AWS returned an error while validating the current credentials or session.")
+            print("    Verify credentials, permissions, region, and AWS service availability.")
         sys.exit(1)
         
     except Exception as e:
@@ -160,43 +169,68 @@ Examples:
     
     print("\nStarting Security Group Scan...")
     securitygroup_findings = scan_security_groups(session)
-    
+
+    print("\nStarting EC2 Scan...")
+    ec2_findings = scan_ec2(session)
+
     all_findings = (
-        iam_findings + 
-        s3_findings + 
-        cloudtrail_findings + 
-        config_findings + 
-        guardduty_findings + 
-        securityhub_findings + 
-        inspector_findings + 
-        kms_findings + 
-        securitygroup_findings
+        iam_findings +
+        s3_findings +
+        cloudtrail_findings +
+        config_findings +
+        guardduty_findings +
+        securityhub_findings +
+        inspector_findings +
+        kms_findings +
+        securitygroup_findings +
+        ec2_findings
     )
     
     if not all_findings:
         print("\n[+] Scan completed. No security findings discovered!")
-        return
+    else:
+        # Count severities
+        counts = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0, "INFO": 0}
+        for f in all_findings:
+            sev = f.severity
+            if sev in counts:
+                counts[sev] += 1
 
-    # Count severities
-    counts = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0, "INFO": 0}
-    for f in all_findings:
-        sev = f.severity
-        if sev in counts:
-            counts[sev] += 1
-            
-    print(f"\nScan completed. Found {len(all_findings)} issues:")
-    for idx, finding in enumerate(all_findings, 1):
-        print_finding(idx, finding)
-        
-    print("-" * 60)
-    print("\nScan Summary:")
-    print(f"  CRITICAL: {counts['CRITICAL']}")
-    print(f"  HIGH:     {counts['HIGH']}")
-    print(f"  MEDIUM:   {counts['MEDIUM']}")
-    print(f"  LOW:      {counts['LOW']}")
-    print(f"  INFO:     {counts['INFO']}")
-    print(f"  Total:    {len(all_findings)}")
-    print("=" * 60)
+        print(f"\nScan completed. Found {len(all_findings)} issues:")
+        for idx, finding in enumerate(all_findings, 1):
+            print_finding(idx, finding)
+
+        print("-" * 60)
+        print("\nScan Summary:")
+        print(f"  CRITICAL: {counts['CRITICAL']}")
+        print(f"  HIGH:     {counts['HIGH']}")
+        print(f"  MEDIUM:   {counts['MEDIUM']}")
+        print(f"  LOW:      {counts['LOW']}")
+        print(f"  INFO:     {counts['INFO']}")
+        print(f"  Total:    {len(all_findings)}")
+        print("=" * 60)
+
+    # Posture risk score: a simple, deterministic sum of severity weights for
+    # observed posture findings only (capped at 100). It is NOT a compliance
+    # score, certification, or a prediction of breach/exploitability
+    # likelihood. Coverage gaps (permission/scanner errors) are excluded from
+    # the score and reported separately as coverage status/issue count.
+    assessment = calculate_assessment(all_findings)
+    print("\nPosture Assessment:")
+    print(f"  Risk Score:        {assessment['risk_score']}/100")
+    print(f"  Risk Level:        {assessment['risk_level']}")
+    print(f"  Coverage Status:   {assessment['coverage_status']}")
+    print(f"  Coverage Issues:   {assessment['coverage_issue_count']}")
+
+    if args.output_json:
+        report = build_json_report(all_findings, region=effective_region)
+        try:
+            write_json_report(report, args.output_json)
+            print(f"\n[+] JSON report written to: {args.output_json}")
+        except OSError:
+            print(f"\n[-] Could not write JSON report to '{args.output_json}'.")
+            print("    Verify the parent directory exists and the path is writable.")
+            sys.exit(1)
 
 if __name__ == "__main__":
     main()
