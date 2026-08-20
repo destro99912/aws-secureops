@@ -1,18 +1,18 @@
 import sys
 import botocore.exceptions
-from core.aws_session import get_aws_session
-from scanners.iam_scanner import scan_iam
-from scanners.s3_scanner import scan_s3
-from scanners.cloudtrail_scanner import scan_cloudtrail
-from scanners.config_scanner import scan_config
-from scanners.guardduty_scanner import scan_guardduty
-from scanners.securityhub_scanner import scan_securityhub
-from scanners.inspector_scanner import scan_inspector
-from scanners.kms_scanner import scan_kms
-from scanners.securitygroup_scanner import scan_security_groups
+from secureops.core.aws_session import get_aws_session
+from secureops.scanners.iam_scanner import scan_iam
+from secureops.scanners.s3_scanner import scan_s3
+from secureops.scanners.cloudtrail_scanner import scan_cloudtrail
+from secureops.scanners.config_scanner import scan_config
+from secureops.scanners.guardduty_scanner import scan_guardduty
+from secureops.scanners.securityhub_scanner import scan_securityhub
+from secureops.scanners.inspector_scanner import scan_inspector
+from secureops.scanners.kms_scanner import scan_kms
+from secureops.scanners.securitygroup_scanner import scan_security_groups
 
 
-from core.models import Finding
+from secureops.core.models import Finding
 
 def print_finding(index, finding: Finding):
     severity_colors = {

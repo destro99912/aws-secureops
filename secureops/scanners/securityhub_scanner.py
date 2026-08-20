@@ -1,6 +1,6 @@
 import botocore.exceptions
-from core.models import Finding
-from core.errors import create_permission_finding
+from secureops.core.models import Finding
+from secureops.core.errors import create_permission_finding
 
 def scan_securityhub(session) -> list[Finding]:
     """

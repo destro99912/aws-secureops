@@ -1,5 +1,5 @@
 import botocore.exceptions
-from core.models import Finding
+from secureops.core.models import Finding
 
 ACCESS_DENIED_CODES = {
     "AccessDenied",
