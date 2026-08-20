@@ -288,3 +288,22 @@ def test_cli_degraded_coverage_displayed_correctly(monkeypatch, capsys):
     assert "Risk Level:        LOW" in output
     assert "Coverage Status:   DEGRADED" in output
     assert "Coverage Issues:   1" in output
+
+
+def test_cli_help_examples_use_module_invocation(monkeypatch, capsys):
+    """
+    --help examples must advertise `python -m secureops.main` (the supported
+    invocation) and include the --output-json example; they must not
+    advertise direct script invocation (`python secureops/main.py`), which no
+    longer works after package-qualified imports.
+    """
+    monkeypatch.setattr(sys, "argv", ["main.py", "--help"])
+
+    with pytest.raises(SystemExit):
+        main_module.main()
+
+    output = capsys.readouterr().out
+
+    assert "python -m secureops.main" in output
+    assert "python -m secureops.main --output-json report.json" in output
+    assert "python secureops/main.py" not in output

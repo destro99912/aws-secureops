@@ -45,10 +45,11 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python secureops/main.py
-  python secureops/main.py --profile secureops
-  python secureops/main.py --region us-east-1
-  python secureops/main.py --profile secureops --region us-east-1
+  python -m secureops.main
+  python -m secureops.main --profile secureops
+  python -m secureops.main --region us-east-1
+  python -m secureops.main --profile secureops --region us-east-1
+  python -m secureops.main --output-json report.json
 """
     )
     parser.add_argument(
