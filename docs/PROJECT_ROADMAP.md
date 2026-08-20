@@ -1,73 +1,58 @@
 # AWS SecureOps Project Roadmap
 
-This document outlines the long-term vision, current status, and future milestones for AWS SecureOps.
+This document outlines the current status and future milestones for AWS SecureOps. AWS SecureOps is a **read-only** AWS cloud security posture assessment tool — this roadmap does not include auto-remediation, compliance certification, or AI-generated remediation; any exploratory work in those directions would be clearly marked as such if it is ever added.
 
 ---
 
-## 1. Completed
+## 1. Completed (v0.1.0)
 
-We have built a simple, modular, and educational CLI tool to assess the security posture of an AWS account. The following infrastructural milestones and scanners are fully operational:
-
-### Infrastructure & Core
 - **Typed Finding Model**: Unified all scanner outputs to return structured `Finding` dataclass objects rather than raw dictionaries.
-- **Unit Testing Engine**: Integrated a full mock-based test suite using botocore's `Stubber` to validate scan logic safely.
-- **Standard Credential Provider Chain**: Replaced custom configuration defaults with boto3's standard credential resolution pipeline.
-- **CLI Profile & Region Support**: Added native command-line option flags (`--profile` and `--region`) powered by python's `argparse`.
-
-### Scanners
-- **IAM**: Audits active credentials, MFA, and general user posture.
-- **S3**: Inspects bucket public access block, default encryption, and secure transit policies.
-- **CloudTrail**: Verifies trail logging status.
-- **AWS Config**: Checks if configuration recording is active.
-- **GuardDuty**: Verifies GuardDuty protection status.
-- **Security Hub**: Checks for active hub subscriptions.
-- **Amazon Inspector**: Verifies automated vulnerability scanning status.
-- **KMS**: Audits key policies and key rotation settings.
-- **EC2 Security Groups**: Audits exposed management ports (SSH/22, RDP/3389), database ports, open protocols, and unused security groups.
+- **Unit Testing Engine**: Mock-based test suite using botocore's `Stubber` to validate scan logic without live AWS calls.
+- **Standard Credential Provider Chain**: boto3's standard credential resolution pipeline.
+- **CLI Profile & Region Support**: `--profile` and `--region` flags via `argparse`.
+- **Scanners**: IAM, S3, CloudTrail, AWS Config, GuardDuty, Security Hub, Amazon Inspector, KMS (key state/rotation only), EC2 Security Groups (management/database ports, all-traffic, unused groups).
 
 ---
 
-## 2. Compute Security (Next Phase)
+## 2. Completed (v0.2.0)
 
-Upcoming checks targeting EC2 compute security and instance configurations:
+### Security & correctness hardening
+- Removed AWS account ID, ARN, and UserId from console output on successful authentication.
+- Sanitized all AWS error output (permission and generic scanner errors) so raw SDK exception text, request IDs, and HTTP metadata are never surfaced.
+- Corrected IAM active-access-key handling (only `Status == "Active"` keys count; access key IDs no longer appear in findings).
+- Package-qualified imports (`secureops.core...`) and corrected CLI module-invocation documentation (`python -m secureops.main`).
 
-- [ ] **EC2 Scanner**: Audit security settings of running EC2 instances, public IP addresses, and SSH keys.
-- [ ] **EBS**: Audit unencrypted EBS volumes and publicly shared snapshots.
-- [ ] **IMDSv2**: Ensure Instance Metadata Service Version 2 is enforced on all instances (disabling IMDSv1).
-- [ ] **Instance Profiles**: Check for over-privileged EC2 role associations.
-- [ ] **Monitoring**: Audit host logs configurations and security agent statuses.
+### Compute security
+- **EC2 instance scanner**: flags running instances with a public IPv4 address (posture signal, not a confirmed exposure).
+- **IMDSv2 enforcement**: flags instances where `MetadataOptions.HttpTokens` is not `"required"`.
+- **EBS encryption-at-rest assessment**: flags unencrypted EBS volumes.
 
----
+### Communications-aware security-group exposure checks
+- SIP (port 5060, TCP/UDP) exposure to `0.0.0.0/0`/`::/0`.
+- SIP-TLS (port 5061, TCP) exposure to `0.0.0.0/0`/`::/0`.
+- Broad public UDP port ranges (≥1000 ports) exposure to `0.0.0.0/0`/`::/0`.
+- These are exposure/posture signals only — they do not confirm that a SIP/RTP or other communications service is actually running or vulnerable.
 
-## 3. Storage & Databases
-
-Future scanner modules to cover essential storage and database layers in AWS:
-
-- [ ] **RDS**: Check for public accessibility, encryption status, and automated backups.
-- [ ] **Secrets Manager**: Audit secrets rotation and resource-based access policies.
-- [ ] **Macie**: Verify if automated sensitive data discovery is enabled.
-
----
-
-## 4. Detection & Edge Security
-
-Expanded checks for auditing monitoring, control plane policies, and network edge defenses:
-
-- [ ] **CloudWatch**: Verify alarm configuration for critical security actions.
-- [ ] **IAM Access Analyzer**: Check if Access Analyzer is active.
-- [ ] **Organizations**: Audit service control policies (SCPs) and configuration.
-- [ ] **WAF (Web Application Firewall)**: Verify association with CloudFront distributions and ALBs.
-- [ ] **Shield**: Verify Advanced DDoS protection status.
+### Reporting & assessment
+- **JSON report export** (`--output-json PATH`), built from a sanitized, versioned report schema.
+- **Posture risk score**: deterministic, severity-weighted, bounded 0–100, posture findings only.
+- **Assessment coverage status**: `COMPLETE`/`DEGRADED` plus a coverage issue count, tracked separately from the risk score.
+- **Sanitized synthetic example report** under `docs/examples/`, generated through the real reporting/scoring code with no real AWS data.
 
 ---
 
-## 5. Reporting & Enhancements
+## 3. Future / Planned
 
-Visualizing and extracting findings in different document formats:
+These are directional ideas, not commitments, and none of them include auto-remediation, compliance certification, or AI-generated remediation:
 
-- [ ] **Multi-Region Scanning**: Sequentially query all active AWS regions instead of scanning a single target region.
-- [ ] **JSON Report Export**: Output scan results to a structured JSON file for API/CI-CD ingestion.
-- [ ] **Risk Score Calculation**: Implement a simple grading system (A-F) based on severity weights.
-- [ ] **Configuration File**: Support scanning scopes, exclusions, and custom rules via a YAML config file.
-- [ ] **Finding Suppression**: Allow users to mark specific resources or checks to be ignored in subsequent runs.
-- [ ] **HTML & PDF Reports**: Generate executive-ready visual HTML dashboards and audit summaries.
+- **Multi-region orchestration**: sequentially scan multiple/all active AWS regions instead of a single target region.
+- **Structured control/check identifiers**: stable IDs per check instead of relying on title text.
+- **Structured finding categories**: an explicit posture/coverage category on `Finding` (or a companion structure) instead of classifying scanner errors by title prefix.
+- **Configurable scoring weights**: allow adjusting severity weights instead of the current fixed values.
+- **Finding suppression / allowlists**: let users mark specific resources or checks to ignore in subsequent runs.
+- **HTML reporting**: a human-readable report format alongside JSON.
+- **Additional AWS service coverage**: e.g. RDS, Secrets Manager, Macie, CloudWatch alarms, IAM Access Analyzer, Organizations SCPs, WAF, Shield.
+- **Enhanced communications-context correlation**: cross-referencing SG exposure with other signals (e.g. attached ENIs, associated load balancers) to reduce false positives — still without active probing or packet inspection.
+- **CI/CD integration**: running AWS SecureOps as part of a pipeline, likely built on top of the existing JSON report export.
+
+Multi-region scanning, YAML configuration, and finding suppression remain unimplemented as of v0.2.0.
