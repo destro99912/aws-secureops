@@ -14,6 +14,7 @@ from secureops.scanners.ec2_scanner import scan_ec2
 
 
 from secureops.core.models import Finding
+from secureops.core.reporting import build_json_report, write_json_report
 
 def print_finding(index, finding: Finding):
     severity_colors = {
@@ -57,7 +58,12 @@ Examples:
         "--region",
         help="AWS region to scan."
     )
-    
+    parser.add_argument(
+        "--output-json",
+        metavar="PATH",
+        help="Write a JSON report to this local file path after scanning."
+    )
+
     args = parser.parse_args()
     
     print("=" * 60)
@@ -67,14 +73,17 @@ Examples:
     profile = args.profile
     region = args.region
     
+    effective_region = None
+
     try:
         # Initialize AWS session
         session = get_aws_session(profile_name=profile, region_name=region)
-        
+        effective_region = getattr(session, "region_name", None)
+
         # Initialize the STS client to verify identity
         sts_client = session.client("sts")
         identity = sts_client.get_caller_identity()
-        
+
         print("\n[+] Successfully authenticated to AWS.")
         
     except botocore.exceptions.ProfileNotFound:
@@ -177,28 +186,37 @@ Examples:
     
     if not all_findings:
         print("\n[+] Scan completed. No security findings discovered!")
-        return
+    else:
+        # Count severities
+        counts = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0, "INFO": 0}
+        for f in all_findings:
+            sev = f.severity
+            if sev in counts:
+                counts[sev] += 1
 
-    # Count severities
-    counts = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0, "INFO": 0}
-    for f in all_findings:
-        sev = f.severity
-        if sev in counts:
-            counts[sev] += 1
-            
-    print(f"\nScan completed. Found {len(all_findings)} issues:")
-    for idx, finding in enumerate(all_findings, 1):
-        print_finding(idx, finding)
-        
-    print("-" * 60)
-    print("\nScan Summary:")
-    print(f"  CRITICAL: {counts['CRITICAL']}")
-    print(f"  HIGH:     {counts['HIGH']}")
-    print(f"  MEDIUM:   {counts['MEDIUM']}")
-    print(f"  LOW:      {counts['LOW']}")
-    print(f"  INFO:     {counts['INFO']}")
-    print(f"  Total:    {len(all_findings)}")
-    print("=" * 60)
+        print(f"\nScan completed. Found {len(all_findings)} issues:")
+        for idx, finding in enumerate(all_findings, 1):
+            print_finding(idx, finding)
+
+        print("-" * 60)
+        print("\nScan Summary:")
+        print(f"  CRITICAL: {counts['CRITICAL']}")
+        print(f"  HIGH:     {counts['HIGH']}")
+        print(f"  MEDIUM:   {counts['MEDIUM']}")
+        print(f"  LOW:      {counts['LOW']}")
+        print(f"  INFO:     {counts['INFO']}")
+        print(f"  Total:    {len(all_findings)}")
+        print("=" * 60)
+
+    if args.output_json:
+        report = build_json_report(all_findings, region=effective_region)
+        try:
+            write_json_report(report, args.output_json)
+            print(f"\n[+] JSON report written to: {args.output_json}")
+        except OSError:
+            print(f"\n[-] Could not write JSON report to '{args.output_json}'.")
+            print("    Verify the parent directory exists and the path is writable.")
+            sys.exit(1)
 
 if __name__ == "__main__":
     main()
