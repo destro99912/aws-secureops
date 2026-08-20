@@ -57,7 +57,7 @@ def test_cli_identity_output_hides_sensitive_fields(monkeypatch, capsys):
     for scanner_name in (
         "scan_iam", "scan_s3", "scan_cloudtrail", "scan_config",
         "scan_guardduty", "scan_securityhub", "scan_inspector",
-        "scan_kms", "scan_security_groups",
+        "scan_kms", "scan_security_groups", "scan_ec2",
     ):
         monkeypatch.setattr(main_module, scanner_name, lambda session: [])
 

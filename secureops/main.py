@@ -10,6 +10,7 @@ from secureops.scanners.securityhub_scanner import scan_securityhub
 from secureops.scanners.inspector_scanner import scan_inspector
 from secureops.scanners.kms_scanner import scan_kms
 from secureops.scanners.securitygroup_scanner import scan_security_groups
+from secureops.scanners.ec2_scanner import scan_ec2
 
 
 from secureops.core.models import Finding
@@ -157,17 +158,21 @@ Examples:
     
     print("\nStarting Security Group Scan...")
     securitygroup_findings = scan_security_groups(session)
-    
+
+    print("\nStarting EC2 Scan...")
+    ec2_findings = scan_ec2(session)
+
     all_findings = (
-        iam_findings + 
-        s3_findings + 
-        cloudtrail_findings + 
-        config_findings + 
-        guardduty_findings + 
-        securityhub_findings + 
-        inspector_findings + 
-        kms_findings + 
-        securitygroup_findings
+        iam_findings +
+        s3_findings +
+        cloudtrail_findings +
+        config_findings +
+        guardduty_findings +
+        securityhub_findings +
+        inspector_findings +
+        kms_findings +
+        securitygroup_findings +
+        ec2_findings
     )
     
     if not all_findings:
